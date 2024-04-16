@@ -41,6 +41,63 @@ REASON=REQUEST
 
 What I really wanted to have was a the context of delegation and status, as per dhcp6c.  "This delegation as recieved, this portion of the delegation was used here..."  With that available, I could use the state changes dhcp6c sends to the secondary scripts to trigger calls to the Opnsense API to manage NPT (I think - this is very much a work in progress).
 
+Something like this:
+
+```
+root@router:/var/db # cat dhcp6c-pds.json 
+{
+    "0": {
+        "prefix": "2601:346:27f:3960::/60",
+        "allcoations": false,
+        "interfaces": {}
+    },
+    "1": {
+        "prefix": "2601:346:27f:3b90::/60",
+        "allcoations": false,
+        "interfaces": {}
+    },
+    "2": {
+        "prefix": "2600:1700:60f0:254d::/64",
+        "allcoations": true,
+        "interfaces": {
+            "igc2": {
+                "sla-id": "0",
+                "sla-len": "0"
+            }
+        }
+    },
+    "3": {
+        "prefix": "2600:1700:60f0:254c::/64",
+        "allcoations": true,
+        "interfaces": {
+            "igc3": {
+                "sla-id": "0",
+                "sla-len": "0"
+            }
+        }
+    },
+    "4": {
+        "prefix": "2600:1700:60f0:254b::/64",
+        "allcoations": false,
+        "interfaces": {}
+    },
+    "5": {
+        "prefix": "2600:1700:60f0:2549::/64",
+        "allcoations": false,
+        "interfaces": {}
+    },
+    "6": {
+        "prefix": "2600:1700:60f0:254f::/64",
+        "allcoations": false,
+        "interfaces": {}
+    },
+    "7": {
+        "prefix": "2600:1700:60f0:254e::/64",
+        "allcoations": false,
+        "interfaces": {}
+    }
+}
+```
 # Summation of Goal
 * Make DHCP6C get prefix delegations for both providers (see var/etc/dhcp6c.conf.custom)
 * Have access to that information (see dhcp6-prefix-json)
