@@ -9,7 +9,7 @@
 #
 import pprint
 import json
-import rs
+import re
 ## Parse ISC style configuration files (i.e. the dhcp6c.conf file)
 ##   https://pypi.org/project/iscpy/
 ##   PIP missing - install PIP on opnsense
@@ -25,21 +25,6 @@ dhcp6cConfFile = "/var/etc/dhcp6c.conf"
 
 # Stuff we will use
 pdDelegations = {}
-
-## Define match patterns
-##    Original shell test for reference:
-#for line in `grep dhcp6c $log | sed -e 's/^.*dhcp6c.*\]//'`; do 
-#        test=`echo $line | grep 'make an IA: PD'`
-#        res=$?
-#        if [ $res -eq 0 ]; then 
-#                PD=`echo $line | sed -e 's/^.*PD-//'`
-#                nextLinePD=1
-#        elif [ $nextLinePD -eq 1 ]; then
-#                prefix=`echo $line | sed -e 's/ create a prefix //;s/ .*//'`
-#                echo "$PD -> \"$prefix\""
-#                nextLinePD=0
-#        fi
-#done
 
 ## Patterns we'll need for matching, below
 isDhcp6cLog = re.compile("^.* dhcp6c .*$")
