@@ -13,5 +13,7 @@ Setup:
 
 Adjust pathing in the script as required to find your log file, where to save the json, and your dhcp6c configuration.
 
+I'm planning to hang this of of the script dhcp6c already calls on changes - along with eventual additonal pieces to update Opnsense as required for my setup.
+
 # Output 
 This script generates a file /var/db/dhcp6c-pd.json.
