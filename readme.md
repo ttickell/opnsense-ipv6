@@ -12,7 +12,7 @@ Legally required disclaimer (ok, not legally) - I a middle aged system administr
 # Things of note for context
 There are many, many, posts by IPv6 purists about what should or should not work, be required, be done.  This is all about what happens, in practice.  So, a few things that stand out:
 
-* No body give the RFC suggested delegations, regardless of what "right" is - and telling Comcast to follow the RFC or mentioning to AT&T what they do is just freaking weird isn't going to add value
+* It seems nobody gives out the RFC suggested delegations (save some really niche providers), regardless of what "right" is - and telling Comcast to follow the RFC or mentioning to AT&T what they do is just freaking weird isn't going to add value
 * Comcast (at least for me) not only will give out something larger than a /64 - they will in fact give out two /60s
 * Comcast is also pretty dang picky about DUID in the DHCP request - since I started with a Raspberry PI running OpenBSD (it's the backup line and I didn't want to break the internet at the house) I had to move the DUID from that box to my Opnsense box
 ** And THEN Comcast is picky because dhcp6c appears to generate another (subordinate? I haven't read the code) DUID for each PD request - so Comcast has to be first in the delegation requests to _use_ the DUID that was transfered. 
@@ -39,4 +39,13 @@ REASON=REQUEST
 
 ```
 
-What I really wanted to have was a the context 
+What I really wanted to have was a the context of delegation and status, as per dhcp6c.  "This delegation as recieved, this portion of the delegation was used here..."  With that available, I could use the state changes dhcp6c sends to the secondary scripts to trigger calls to the Opnsense API to manage NPT (I think - this is very much a work in progress).
+
+# Summation of Goal
+* Make DHCP6C get prefix delegations for both providers (see var/etc/dhcp6c.conf.custom)
+* Have access to that information (see dhcp6-prefix-json)
+* Create additional tooling to manage NPT for failover states (TBD) 
+* Pull some cables and see if it actually works (TBD)
+* Package this up into something consumable. 
+
+Let's see how this goes.
