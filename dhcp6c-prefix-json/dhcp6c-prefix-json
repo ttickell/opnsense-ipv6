@@ -1,0 +1,122 @@
+#!/usr/local/bin/python3
+#
+# *! IMPORTANT !*
+#
+#  This requires that Opensense pass the "-d" flag to dhcp6c
+#  
+#  To do this, go to "Interfaces" -> "Settings" and in the "IPv6 DHCP" options, 
+#    change the log level to "Info"
+#
+
+
+import pprint
+import json
+
+## Pickle to save data between runs
+##  https://stackoverflow.com/questions/1047318/easiest-way-to-persist-a-data-structure-to-a-file-in-python
+import pickle
+
+## Parse ISC style configuration files (i.e. the dhcp6c.conf file)
+##   https://pypi.org/project/iscpy/
+##   PIP missing - install PIP
+##   https://pip.pypa.io/en/stable/installation/
+##   https://stackoverflow.com/questions/19212176/parsing-isc-files-with-python-dhcpd-conf-iscpy-module
+##   PyPI Verion broken-instal here instead (install git first) 
+##   https://github.com/egberts/iscpy/issues/1
+import iscpy
+
+## we need to match patterns
+## https://stackoverflow.com/questions/12595051/check-if-string-matches-pattern
+import re
+
+logFile = "/var/log/system/latest.log"
+saveFile = "/var/db/dhcp6c-pds.json"
+dhcp6cConfFile = "/var/etc/dhcp6c.conf"
+
+# Stuff we will use
+pdDelegations = {}
+
+## Define match patterns
+## Original shell test for reference:
+#for line in `grep dhcp6c $log | sed -e 's/^.*dhcp6c.*\]//'`; do 
+#        test=`echo $line | grep 'make an IA: PD'`
+#        res=$?
+#        if [ $res -eq 0 ]; then 
+#                PD=`echo $line | sed -e 's/^.*PD-//'`
+#                nextLinePD=1
+#        elif [ $nextLinePD -eq 1 ]; then
+#                prefix=`echo $line | sed -e 's/ create a prefix //;s/ .*//'`
+#                echo "$PD -> \"$prefix\""
+#                nextLinePD=0
+#        fi
+#done
+isDhcp6cLog = re.compile("^.* dhcp6c .*$")
+isMakePD = re.compile("^.*make an IA: PD.*$")
+isCreatePrefix = re.compile("^.* create a prefix .*$")
+isPrefixInterface = re.compile("^.*prefix-interface .*")
+
+# Load dhcp6c configuration
+with open(dhcp6cConfFile, 'r') as configHandle:
+   dhcp6cConf = iscpy.ParseISCString(configHandle.read())
+   #print(dhcp6cConf)
+
+## Does my save file exist / can i make it exist
+try:
+  fileHandle = open(saveFile, 'r')
+except:
+  try:
+    fileHandle = open(saveFile, 'w')
+  except:
+    printf("%s does not exist and could not create" % saveFile)
+    exit
+finally: 
+  fileHandle.close()
+  
+#with open(saveFile, 'r') as fileHandle:
+#  prefixData = pickle.load(fileHandle)
+#  fileHandle.close()
+
+## extract just the dhcp6c logs since 
+## something else could have logged inbetween events
+logLines = []
+with open(logFile, 'r') as log:
+  for index, line in enumerate(log):
+    if (isDhcp6cLog.match(line)):
+      logLines.append(line.strip())
+
+## Look for just the PD assignments - adjacent lines look like:
+## <29>1 2024-04-16T07:15:28+00:00 router.home.tickell.us dhcp6c 16328 - [meta sequenceId="384"] make an IA: PD-7
+## <29>1 2024-04-16T07:15:28+00:00 router.home.tickell.us dhcp6c 16328 - [meta sequenceId="385"] create a prefix 2600:1700:60f0:254e::/64 pltime=3600, vltime=3600
+for x in range(len(logLines)):
+  if (isMakePD.match(logLines[x])):
+    pdLine = logLines[x]
+    pdLine = re.sub(r'^.* make an IA: PD-', '', pdLine)
+    x = x +1
+    prefixLine = logLines[x]
+    if not isCreatePrefix.match(prefixLine):
+      continue
+    prefixLine = re.sub(r'^.* create a prefix ', '', prefixLine)
+    prefixLine = re.sub(r' .*', '', prefixLine)
+    
+    # Doesn't matter what came before, only save the newest reference 
+    pdDelegations[pdLine] = {}
+    pdDelegations[pdLine]['prefix'] = prefixLine
+    pdDelegations[pdLine]['allcoations'] = False
+    pdDelegations[pdLine]['interfaces'] = {};
+   
+    #look for PD association in dhcp6c.conf
+    refString = "id-assoc pd " + pdLine
+    for confItem in dhcp6cConf[refString].keys():
+      if isPrefixInterface.match(confItem):
+        pdDelegations[pdLine]['allcoations'] = True
+        interface = re.sub("^.*prefix-interface ", '', confItem)
+        pdDelegations[pdLine]['interfaces'][interface] = {}
+        pdDelegations[pdLine]['interfaces'][interface]['sla-id'] = dhcp6cConf[refString][confItem]['sla-id']
+        pdDelegations[pdLine]['interfaces'][interface]['sla-len'] = dhcp6cConf[refString][confItem]['sla-len']
+
+
+jsonDump = json.dumps(pdDelegations, indent=4)
+# print(jsonDump)
+
+with open(saveFile, 'w') as fileHandle:
+  print(jsonDump, file=fileHandle)
