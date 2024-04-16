@@ -4,10 +4,10 @@ I recently swapped out my Asus router for an Opnsense box.  Key among the things
 
 It was quickly clear that this was pretty easy ... with IPv4.  IPv6 presented special fun, especially as I wasn't happy with a default /64 from each provider.
 
-There's a lot of information in the Opnsene and pFsense forums on this - however, I started this repository to publsh bits that (hopefully) synthesize these things into working parts that others can use / improve. 
+There's a lot of information in the Opnsene and pFsense forums on this - however, I started this repository to publish bits that (hopefully) synthesize these things into working parts that others can use / improve. 
 
 > [!NOTE]
-> Legally required disclaimer (ok, not legally) - I a middle aged system administrator who's played the jack of all trades, master of none role my entire career.  I am not an IPv6 expert by any stretch of the term.  The entire reason I've been focused on having multiple IPv6 networks is because I wanted to learn more about IPv6.  Please be kind in any commentary an pull requests.
+> Legally required disclaimer (ok, not legally) - I a middle aged system administrator who's played the jack of all trades, master of none role my entire career.  I am not an IPv6 expert by any stretch of the term.  The entire reason I've been focused on having multiple IPv6 networks is because I wanted to learn more about IPv6.  Please be kind in any commentary pull requests.
 
 # Things of note for context
 There are many, many, posts by IPv6 purists about what should or should not work, be required, be done.  This is all about what happens, in practice.  So, a few things that stand out:
@@ -15,8 +15,8 @@ There are many, many, posts by IPv6 purists about what should or should not work
 * It seems nobody gives out the RFC suggested delegations (save some really niche providers), regardless of what "right" is - and telling Comcast to follow the RFC or mentioning to AT&T what they do is just freaking weird isn't going to add value
 * Comcast (at least for me) not only will give out something larger than a /64 - they will in fact give out two /60s
 * Comcast is also pretty dang picky about DUID in the DHCP request - since I started with a Raspberry PI running OpenBSD (it's the backup line and I didn't want to break the internet at the house) I had to move the DUID from that box to my Opnsense box
-** And THEN Comcast is picky because dhcp6c appears to generate another (subordinate? I haven't read the code) DUID for each PD request - so Comcast has to be first in the delegation requests to _use_ the DUID that was transfered. 
-* AT&T give out plenty of  IPv6 space - one drip at at time.  It seems like they give a /60 to their box, which then will dole out up to eight /64s as unique delegations
+** And THEN Comcast is picky because dhcp6c appears to generate another (subordinate? I haven't read the code) DUID for each PD request - so Comcast has to be first in the delegation requests to _use_ the DUID that was transferred. 
+* AT&T gives out plenty of  IPv6 space - one drip at a time.  It seems like they give a /60 to their box, which then will dole out up to eight /64s as unique delegations
 
 In the end, I need to have enough space from both providers that all my primary networks get a /64 from AT&T and they have separate NPTv6 mappings for those spaces in case AT&T goes down and the WAN interfaces failover to Comcast.   Yippee.
 
@@ -39,7 +39,7 @@ REASON=REQUEST
 
 ```
 
-What I really wanted to have was a the context of delegation and status, as per dhcp6c.  "This delegation as recieved, this portion of the delegation was used here..."  With that available, I could use the state changes dhcp6c sends to the secondary scripts to trigger calls to the Opnsense API to manage NPT (I think - this is very much a work in progress).
+What I really wanted to have was a the context of delegation and status, as per dhcp6c.  "This delegation as received, this portion of the delegation was used here..."  With that available, I could use the state changes dhcp6c sends to the secondary scripts to trigger calls to the Opnsense API to manage NPT (I think - this is very much a work in progress).
 
 Something like this:
 
