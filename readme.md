@@ -6,8 +6,8 @@ It was quickly clear that this was pretty easy ... with IPv4.  IPv6 presented sp
 
 There's a lot of information in the Opnsene and pFsense forums on this - however, I started this repository to publsh bits that (hopefully) synthesize these things into working parts that others can use / improve. 
 
-[!NOTE]
-Legally required disclaimer (ok, not legally) - I a middle aged system administrator who's played the jack of all trades, master of none role my entire career.  I am not an IPv6 expert by any stretch of the term.  The entire reason I've been focused on having multiple IPv6 networks is because I wanted to learn more about IPv6.  Please be kind in any commentary an pull requests.
+> [!NOTE]
+> Legally required disclaimer (ok, not legally) - I a middle aged system administrator who's played the jack of all trades, master of none role my entire career.  I am not an IPv6 expert by any stretch of the term.  The entire reason I've been focused on having multiple IPv6 networks is because I wanted to learn more about IPv6.  Please be kind in any commentary an pull requests.
 
 # Things of note for context
 There are many, many, posts by IPv6 purists about what should or should not work, be required, be done.  This is all about what happens, in practice.  So, a few things that stand out:

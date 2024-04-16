@@ -8,6 +8,6 @@ It's also of note that while two WAN interfaces are present and the GUI configur
 
 Since I needed this static, I found lots of references on the internet to saving the DUID file to /conf and having it copied in place - Opnsense seems to created the proper override of DUID since those posts.
 
-[!NOTE]
-Sidebar.  DHCP6C is part of the the (very old) WIDE-KAME project, which has been decomisissioned.  I did find two branches of code - one that OpenBSD seems to be packaging from an 2008 release and one from Opnsense branched from a 2005 release.   THey. Don't. Work. The. Same.   Also, the one in the Opnsense project seems to be actively maintained.  This is all speculation and inference - have not really researched the ancestry of both builds.  The OpenBSD version will not build easily on FreeBSD / Opnsense due to a conflict with the definition of dprintf with the stystem common.h - it will build if you deal with it, but using it didn't actually fix my Comcast delegaton woes.
+> [!NOTE]
+> Sidebar.  DHCP6C is part of the the (very old) WIDE-KAME project, which has been decomisissioned.  I did find two branches of code - one that OpenBSD seems to be packaging from an 2008 release and one from Opnsense branched from a 2005 release.   THey. Don't. Work. The. Same.   Also, the one in the Opnsense project seems to be actively maintained.  This is all speculation and inference - have not really researched the ancestry of both builds.  The OpenBSD version will not build easily on FreeBSD / Opnsense due to a conflict with the definition of dprintf with the stystem common.h - it will build if you deal with it, but using it didn't actually fix my Comcast delegaton woes.
 
