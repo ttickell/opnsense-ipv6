@@ -101,14 +101,14 @@ for x in range(len(logLines)):
     # Doesn't matter what came before, only save the newest reference 
     pdDelegations[pdLine] = {}
     pdDelegations[pdLine]['prefix'] = prefixLine
-    pdDelegations[pdLine]['allcoations'] = False
+    pdDelegations[pdLine]['allocations'] = False
     pdDelegations[pdLine]['interfaces'] = {};
    
     #look for PD association in dhcp6c.conf
     refString = "id-assoc pd " + pdLine
     for confItem in dhcp6cConf[refString].keys():
       if isPrefixInterface.match(confItem):
-        pdDelegations[pdLine]['allcoations'] = True
+        pdDelegations[pdLine]['allocations'] = True
         interface = re.sub("^.*prefix-interface ", '', confItem)
         pdDelegations[pdLine]['interfaces'][interface] = {}
         pdDelegations[pdLine]['interfaces'][interface]['sla-id'] = dhcp6cConf[refString][confItem]['sla-id']
