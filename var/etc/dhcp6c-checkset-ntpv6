@@ -1,0 +1,173 @@
+#!/usr/local/bin/python3
+
+import json
+import yaml
+import requests
+import os
+import ipaddress
+import syslog
+
+## modify to accept command line and environemnt variable
+config_file = "/root/checkset-ntpv6.yml"
+
+def ipv6_network_calc(avail_pds, pd_id, sla, len):
+  # String of prefix delegated
+  pd = avail_pds[str(pd_id)]['prefix']
+  # network object from that string
+  pd = ipaddress.IPv6Network(pd, True)
+  # Get subnets from that delegated prefix with length of len 
+  #   and return the one in position SLA
+  subnet = list(pd.subnets(len))[sla]
+  return(str(subnet))
+
+def ipv6_in_ula(ula, address):
+  ula = ipaddress.IPv6Network(ula)
+  ## we get an address with /prefix from API
+  ## Make an interface to get the IP object
+  interface = ipaddress.IPv6Interface(address)
+  address = interface.ip
+  ## we don't need to kno anyting more there than the address
+  ##  is in the ULA
+  return address in ula
+
+def ipv6_network_from_string_address(address):
+  interface = ipaddress.IPv6Interface(address)
+  return str(interface.network)
+
+def npt_rule_add(source_net, destination_net, interface, url_base, key, secret):
+  url = url_base + "/firewall/npt/addRule"
+  req_data = { 'rule': { 'sequence': '1', 'source_net': source_net, 'destination_net': destination_net, 'description': 'Added by dhcp6c-checkset-nptv6' } }  
+  add_req = requests.post(url, auth=(key, secret), json=req_data)
+  if add_req.status_code != 200:
+    raise ValueError('Status Code ' + str(add_req.status_code) + ' from URL: ' + url + ' with data ' + add_req.text)
+  req_data=json.loads(add_req.text)
+  if req_data['result'] == "failed":
+    raise ValueError('Status Code ' + str(add_req.status_code) + ' from URL: ' + url + ' with data ' + add_req.text)
+
+def npt_rule_del(uuid, url_base, key, secret):
+  ## note uuid passed as parameter in path not json
+  url = url_base + "/firewall/npt/delRule/" + uuid
+  del_req = requests.post(url, auth=(key, secret))
+  if del_req.status_code != 200:
+    raise ValueError('Status Code ' + str(del_req.status_code) + ' from URL: ' + url + ' with data ' + del_req.text)
+  req_data = json.loads(del_req.text)
+  if req_data['result'] == "failed":
+    raise ValueError('Status Code ' + str(del_req.status_code) + ' from URL: ' + url + ' with data ' + del_req.text)
+
+def need_mapping(source_net, destination_net, npt_config):
+  # If nothing is mapped, we need to add the mapping
+  if npt_config['rowCount'] == 0:
+    return True
+  else:
+    for row in npt_config['rows']:
+      # If we have the mapping, we do not need to add the mapping
+      if row['source_net'] == source_net and row['destination_net'] == destination_net:
+        return False
+  # If we make it here, we have mappings but we don't have this mapping
+  return True
+
+def get_current_interface_data(interface, url_base, key, secret):
+  url = url_base + "/interfaces/overview/getInterface/" + interface
+  interface_data = requests.get(url, auth=(key, secret))
+  interface_data = json.loads(interface_data.text)
+  return interface_data
+
+## which position in the rows is this mapping
+def npt_get_row(source_net, destination_net, npt_config):
+  count = 0
+  for row in npt_config['rows']:
+    # If we have the mapping, we do not need to add the mapping
+    if row['source_net'] == source_net and row['destination_net'] == destination_net:
+      return count
+    count += 1
+  return -1 
+
+## load config
+with open(config_file, 'r') as file:
+  config = yaml.safe_load(file)
+
+## Config references other things we want
+dhcp6c_pds_file  = config['dhcp6c-pds-file']
+dhcp6c_allocations_file  = config['dhcp6c-allocations-file']
+
+## if a custom CA is set in the config, use it for 
+##  requests (without passing on every call)
+if 'ca-bundle' in config:
+  os.environ['REQUESTS_CA_BUNDLE'] = config['ca-bundle']
+
+with open(dhcp6c_pds_file, 'r') as file:
+  dhcp6c_pds = json.load(file)
+
+# Phase 2 to save this
+#merged_state = dhcp6c_pds 
+
+## Get Current NPTv6 Config
+load_all_rules = False
+url = config['api-base'] + "/firewall/npt/searchRule"
+npt_fetch = requests.get(url, auth=(config['api-key'], config['api-secret']))
+npt_config = json.loads(npt_fetch.text)
+if npt_config['rowCount'] == 0:
+  load_all_rules = True
+else:
+  row_count = npt_config['rowCount']
+  my_count = 0
+  while my_count < row_count:
+    #  mark each row as invalid until we find a config match.
+    #  With each match, will mark valid - anything left 
+    #  after is something we used to use that needs to be clieaned up
+    npt_config['rows'][my_count]['valid'] = False
+    my_count+=1
+
+# Step 1: for every definition of a mapping the the config yaml
+##  figure out the from the PD information if what the actual range should be
+needed_mappings = {}
+for named_int in config['lan-interfaces']:
+  ## Get what's actually configured on each interface in the config
+  real_int = config['lan-interfaces'][named_int]['interface']
+  interface_data = get_current_interface_data(real_int, config['api-base'], config['api-key'], config['api-secret'])
+
+  ## check every IPV6 address to see if it's in the ULA range we use 
+  ##  Start by assuming it does _not_
+  interface_has_ula_addr = False
+  for item in interface_data['message']['ipv6']['value']:
+    assigned_addr = item['ipaddr']
+
+    ## Note if we find a match and hold on to the prefix in use
+    if ipv6_in_ula(config['ipv6-ula'], assigned_addr): 
+      interface_has_ula_addr = True
+      network_string = (ipv6_network_from_string_address(assigned_addr))
+      break
+
+  ## If we have not found anything, go on to the next interface
+  if not interface_has_ula_addr:
+    # not private address configured on this interface - out config doesn't
+    #   matter
+    continue 
+  
+  ## but if we have, find all the mappings we need
+  for mapped_int in config['lan-interfaces'][named_int]['mappings']:
+    pub_net = ipv6_network_calc(dhcp6c_pds,
+            config['lan-interfaces'][named_int]['mappings'][mapped_int]['pd-id'],
+            config['lan-interfaces'][named_int]['mappings'][mapped_int]['pd-sla'],
+            config['lan-interfaces'][named_int]['mappings'][mapped_int]['pd-len'])
+    ## If the mappings is not neeed, mark the row as valid so we don't clean it up
+    if not need_mapping(network_string, pub_net, npt_config) and npt_config['rowCount'] > 0:
+      which_row = npt_get_row(network_string, pub_net, npt_config)
+      if which_row >= 0:
+        npt_config['rows'][which_row]['valid'] = True
+    else:
+      try:
+        npt_rule_add(network_string, pub_net, mapped_int, config['api-base'], config['api-key'], config['api-secret'])
+      except ValueError as error:
+        print("Could not add " + network_string + " -> " + pub_net)
+        print(error)
+
+## Cleanup Old Items
+for row in npt_config['rows']: 
+  if  row['valid'] == False:
+    try:
+      npt_rule_del(row['uuid'], config['api-base'], config['api-key'], config['api-secret'])
+    except ValueError as error: 
+      print("Could not delete " + str(row))
+      print(error)
+            
