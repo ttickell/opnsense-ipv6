@@ -129,7 +129,7 @@ Above I believe I noted I started working on this to learn more about IPv6.  I l
 
 Using a ULA - even if it means my network prefers IPv4 - and ensuring my users (ahem, family) can get connections to services no matter which stack they are usings - strikes me as one of these learning opportunities.   Getting a connection is more important than how the connection was made.  Hell, if they were using IPX/SPX would it really matter?
 
-Yet, part of me wants to side with the article's author and tell the world (in this case my family?) to deal with the outage and interface resets that a provider failure would require, without the use of ULAs, just to be sure we're defautling to IPv6.
+Yet, part of me wants to side with the article's author and tell the world (in this case my family?) to deal with the outage and interface resets that a provider failure would require, without the use of ULAs, just to be sure we're defaulting to IPv6.
 
 That part of me probably needs to be dragged out back behind a barn, drawn and quartered, shot, and then suffocated.  It's not really a question of which protocol is used, it's a question of did the use case work.
 
