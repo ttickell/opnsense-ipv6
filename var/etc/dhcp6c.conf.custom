@@ -32,6 +32,7 @@ interface igc0 {
   send ia-pd 5; # request prefix delegation
   send ia-pd 6; # request prefix delegation
   send ia-pd 7; # request prefix delegation
+  send ia-pd 8; # request prefix delegation
   request domain-name-servers;
   request domain-name;
   script "/var/etc/dhcp6c_wan_script.sh"; # we'd like some nameservers please
@@ -46,13 +47,13 @@ id-assoc pd 2 {
   };
 };
 
-id-assoc pd 3 { 
-  prefix-interface igc3 {
-    sla-id 0;
-    sla-len 0;
-  };
-};
+## PD 3 replaced with ULA block on igc3
+id-assoc pd 3 { };
 id-assoc pd 4 { };
 id-assoc pd 5 { };
 id-assoc pd 6 { };
 id-assoc pd 7 { };
+id-assoc pd 8 { };
+interface igc1 {
+  script "/var/etc/dhcp6c_opt1_script.sh";
+};
