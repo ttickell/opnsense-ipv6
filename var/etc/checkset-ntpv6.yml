@@ -1,7 +1,7 @@
 checkset-ntp6v-conf-version: 0
 api-base: "https://router.home.tickell.us/api"
-api-key: 
-api-secret: 
+api-key: ""
+api-secret: ""
 dhcp6c-pds-file: "/var/db/dhcp6c-pds.json"
 dhcp6c-allocations-file: "/var/db/dhcp6c-allocations.json"
 ca-bundle: "/home/tickell/tickell-us-ca.pem"
@@ -29,4 +29,26 @@ lan-interfaces:
       WAN2:
         pd-id: 0
         pd-sla: 1
+        pd-len: 4
+  OVPN:
+    interface: ovpns1
+    mappings:
+      WAN:
+        pd-id: 5
+        pd-sla: 0
+        pd-len: 0
+      WAN2:
+        pd-id: 0
+        pd-sla: 3
+        pd-len: 4
+  Wiregaurd:
+    interface: wg0
+    mappings:
+      WAN:
+        pd-id: 4
+        pd-sla: 0
+        pd-len: 0
+      WAN2:
+        pd-id: 0
+        pd-sla: 2
         pd-len: 4

@@ -6,13 +6,28 @@ import requests
 import os
 import ipaddress
 import syslog
+import sys
+
+## TODO: Validate the YAML INPUT ... 
+## https://stackoverflow.com/questions/3262569/validating-a-yaml-document-in-python
+##
 
 ## modify to accept command line and environemnt variable
 config_file = "/root/checkset-ntpv6.yml"
 
 def ipv6_network_calc(avail_pds, pd_id, sla, len):
   # String of prefix delegated
-  pd = avail_pds[str(pd_id)]['prefix']
+  try:
+    pd = avail_pds[str(pd_id)]['prefix']
+  except KeyError as e:
+    print("Exception looking for pd_id " + pd_id + " in avail_pds:")
+    print()
+    print("Check your configuration file to ensure definition matches reality")
+    print("Available PDs are: ")
+    print(json.dumps(avail_pds, indent=4))
+    print()
+    print("Requested PD from Configuration is: " + str(e))
+    sys.exit()
   # network object from that string
   pd = ipaddress.IPv6Network(pd, True)
   # Get subnets from that delegated prefix with length of len 
