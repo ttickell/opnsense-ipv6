@@ -3,7 +3,7 @@ api-base: "https://router.home.tickell.us/api"
 api-key: ""
 api-secret: ""
 dhcp6c-pds-file: "/var/db/dhcp6c-pds.json"
-dhcp6c-allocations-file: "/var/db/dhcp6c-allocations.json"
+# dhcp6c-allocations-file: "/var/db/dhcp6c-allocations.json"
 ca-bundle: "/home/tickell/tickell-us-ca.pem"
 ipv6-ula: fd03:17ac:e938::/48
 

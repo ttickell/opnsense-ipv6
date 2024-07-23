@@ -20,7 +20,7 @@ def ipv6_network_calc(avail_pds, pd_id, sla, len):
   try:
     pd = avail_pds[str(pd_id)]['prefix']
   except KeyError as e:
-    print("Exception looking for pd_id " + pd_id + " in avail_pds:")
+    print("Exception looking for pd_id " + str(pd_id) + " in avail_pds:")
     print()
     print("Check your configuration file to ensure definition matches reality")
     print("Available PDs are: ")
@@ -49,9 +49,11 @@ def ipv6_network_from_string_address(address):
   interface = ipaddress.IPv6Interface(address)
   return str(interface.network)
 
-def npt_rule_add(source_net, destination_net, interface, url_base, key, secret):
+def npt_rule_add(source_net, destination_net, interface, identifier, internal_int, url_base, key, secret):
   url = url_base + "/firewall/npt/addRule"
-  req_data = { 'rule': { 'sequence': '1', 'source_net': source_net, 'destination_net': destination_net, 'description': 'Added by dhcp6c-checkset-nptv6' } }  
+  #           {"rule":{"enabled":"1","sequence":"1","log":"0","interface":"wan","source_net":"10::1","destination_net":"12::1","trackif":"","categories":"1cfe36da-0426-46af-963a-5a9201fb31d8","description":"test"}}
+  req_data = { 'rule': {'enabled':1,'sequence':'1','log':'0','interface': identifier, 'source_net': source_net, 'destination_net': destination_net, 'description': interface + '<->' + internal_int + ' ' + 'dhcp6c-checkset-nptv6' } }  
+  print(req_data)
   add_req = requests.post(url, auth=(key, secret), json=req_data)
   if add_req.status_code != 200:
     raise ValueError('Status Code ' + str(add_req.status_code) + ' from URL: ' + url + ' with data ' + add_req.text)
@@ -103,7 +105,6 @@ with open(config_file, 'r') as file:
 
 ## Config references other things we want
 dhcp6c_pds_file  = config['dhcp6c-pds-file']
-dhcp6c_allocations_file  = config['dhcp6c-allocations-file']
 
 ## if a custom CA is set in the config, use it for 
 ##  requests (without passing on every call)
@@ -116,22 +117,45 @@ with open(dhcp6c_pds_file, 'r') as file:
 # Phase 2 to save this
 #merged_state = dhcp6c_pds 
 
+## Get Interface mappings
+url = config['api-base'] + "/interfaces/overview/export"
+int_fetch = requests.get(url,auth=(config['api-key'], config['api-secret']))
+int_config = json.loads(int_fetch.text)
+global_devices = {}
+for one in int_config:
+  identifier = one['identifier']
+  device = one['device']
+  description = one['description']
+  if not identifier:
+    identifier = device
+  #print(device + " -> " + identifier + " -> " + description)
+  global_devices[description] = {}
+  global_devices[description]['device'] = device
+  global_devices[description]['identifier'] = identifier
+
+
 ## Get Current NPTv6 Config
 load_all_rules = False
 url = config['api-base'] + "/firewall/npt/searchRule"
 npt_fetch = requests.get(url, auth=(config['api-key'], config['api-secret']))
 npt_config = json.loads(npt_fetch.text)
-if npt_config['rowCount'] == 0:
-  load_all_rules = True
-else:
-  row_count = npt_config['rowCount']
-  my_count = 0
-  while my_count < row_count:
-    #  mark each row as invalid until we find a config match.
-    #  With each match, will mark valid - anything left 
-    #  after is something we used to use that needs to be clieaned up
-    npt_config['rows'][my_count]['valid'] = False
-    my_count+=1
+if npt_fetch.status_code != 200:
+  sys.exit(npt_config)
+
+try:
+  if npt_config['rowCount'] == 0:
+    load_all_rules = True
+  else:
+    row_count = npt_config['rowCount']
+    my_count = 0
+    while my_count < row_count:
+      #  mark each row as invalid until we find a config match.
+      #  With each match, will mark valid - anything left 
+      #  after is something we used to use that needs to be clieaned up
+      npt_config['rows'][my_count]['valid'] = False
+      my_count+=1
+except Exception as error:
+  print(error)
 
 # Step 1: for every definition of a mapping the the config yaml
 ##  figure out the from the PD information if what the actual range should be
@@ -140,7 +164,7 @@ for named_int in config['lan-interfaces']:
   ## Get what's actually configured on each interface in the config
   real_int = config['lan-interfaces'][named_int]['interface']
   interface_data = get_current_interface_data(real_int, config['api-base'], config['api-key'], config['api-secret'])
-
+  
   ## check every IPV6 address to see if it's in the ULA range we use 
   ##  Start by assuming it does _not_
   interface_has_ula_addr = False
@@ -172,7 +196,9 @@ for named_int in config['lan-interfaces']:
         npt_config['rows'][which_row]['valid'] = True
     else:
       try:
-        npt_rule_add(network_string, pub_net, mapped_int, config['api-base'], config['api-key'], config['api-secret'])
+        identifier = global_devices[mapped_int]['identifier']
+        print(identifier)
+        npt_rule_add(network_string, pub_net, mapped_int, identifier, named_int, config['api-base'], config['api-key'], config['api-secret'])
       except ValueError as error:
         print("Could not add " + network_string + " -> " + pub_net)
         print(error)
