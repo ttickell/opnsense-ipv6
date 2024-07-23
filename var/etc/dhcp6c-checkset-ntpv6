@@ -13,7 +13,7 @@ import sys
 ##
 
 ## modify to accept command line and environemnt variable
-config_file = "/root/checkset-ntpv6.yml"
+config_file = "/var/etc/checkset-ntpv6.yml"
 
 def ipv6_network_calc(avail_pds, pd_id, sla, len):
   # String of prefix delegated
@@ -51,15 +51,18 @@ def ipv6_network_from_string_address(address):
 
 def npt_rule_add(source_net, destination_net, interface, identifier, internal_int, url_base, key, secret):
   url = url_base + "/firewall/npt/addRule"
-  #           {"rule":{"enabled":"1","sequence":"1","log":"0","interface":"wan","source_net":"10::1","destination_net":"12::1","trackif":"","categories":"1cfe36da-0426-46af-963a-5a9201fb31d8","description":"test"}}
   req_data = { 'rule': {'enabled':1,'sequence':'1','log':'0','interface': identifier, 'source_net': source_net, 'destination_net': destination_net, 'description': interface + '<->' + internal_int + ' ' + 'dhcp6c-checkset-nptv6' } }  
-  print(req_data)
   add_req = requests.post(url, auth=(key, secret), json=req_data)
   if add_req.status_code != 200:
     raise ValueError('Status Code ' + str(add_req.status_code) + ' from URL: ' + url + ' with data ' + add_req.text)
   req_data=json.loads(add_req.text)
   if req_data['result'] == "failed":
     raise ValueError('Status Code ' + str(add_req.status_code) + ' from URL: ' + url + ' with data ' + add_req.text)
+
+def npt_rule_apply(url_base, key, secret):
+  url = url_base + "/firewall/npt/apply"
+  req_data = {}
+  apply_req = requests.post(url,  auth=(key, secret), json=req_data)
 
 def npt_rule_del(uuid, url_base, key, secret):
   ## note uuid passed as parameter in path not json
@@ -202,6 +205,13 @@ for named_int in config['lan-interfaces']:
       except ValueError as error:
         print("Could not add " + network_string + " -> " + pub_net)
         print(error)
+
+      try:
+        npt_rule_apply(config['api-base'], config['api-key'], config['api-secret'])
+      except ValueError as error:
+        print("Error applying rule")
+        print(error)
+
 
 ## Cleanup Old Items
 for row in npt_config['rows']: 
