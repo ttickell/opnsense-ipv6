@@ -22,7 +22,7 @@ fd03:17ac:e938::/48
                 fd03:17ac:e938:11::/64 <-- CAM (igc3) - Map PD 3, PD 0, 1/4
                 fd03:17ac:e938:12::/64 <-- Wiregaurd  - Map PD 4, PD 0, 2/4
                 fd03:17ac:e938:13::/64 <-- OpenVPN    - Map PD 5, PD 0, 3/4
-                fd03:17ac:e938:14::/64 
+                fd03:17ac:e938:14::/64 <-- Guest Net  - Map PD 6, PD 0, 4/4
                 fd03:17ac:e938:15::/64
                 fd03:17ac:e938:16::/64
                 fd03:17ac:e938:17::/64
