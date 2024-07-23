@@ -40,12 +40,8 @@ interface igc0 {
 id-assoc na 1 { };
 
 ## LAN Interface
-id-assoc pd 2 {
-  prefix-interface igc2 {
-    sla-id 0;
-    sla-len 0;
-  };
-};
+## Switch to ULA BLock 
+id-assoc pd 2 { };
 
 ## PD 3 replaced with ULA block on igc3
 id-assoc pd 3 { };
@@ -54,6 +50,3 @@ id-assoc pd 5 { };
 id-assoc pd 6 { };
 id-assoc pd 7 { };
 id-assoc pd 8 { };
-interface igc1 {
-  script "/var/etc/dhcp6c_opt1_script.sh";
-};
