@@ -1,7 +1,7 @@
 checkset-ntp6v-conf-version: 0
 api-base: "https://router.home.tickell.us/api"
-api-key: ""
-api-secret: ""
+api-key: "zLYZ3EUQzX1euvXmiPFh+v17xpTt7vB7ZSrL9jMGq8aNNAnZwQVY6undCiM+xCqfl617RDQAymS0RPs5"
+api-secret: "iFduPUO7Nzt0Wy/2RAeDSj0FZIUvaxaY+tnfqlfEoCQTO36Y0nkwec1PSHNafdQsWxHISX4EArDJWk84"
 dhcp6c-pds-file: "/var/db/dhcp6c-pds.json"
 ca-bundle: "/home/tickell/tickell-us-ca.pem"
 ipv6-ula: fd03:17ac:e938::/48
@@ -50,4 +50,15 @@ lan-interfaces:
       WAN2:
         pd-id: 0
         pd-sla: 2
+        pd-len: 4
+  GuestNetwork:
+    interface: vlan0.050
+    mappings:
+#      WAN:
+#        pd-id: 4
+#       pd-sla: 0
+#        pd-len: 0
+      WAN2:
+        pd-id: 0
+        pd-sla: 4
         pd-len: 4

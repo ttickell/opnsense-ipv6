@@ -52,6 +52,7 @@ def ipv6_network_from_string_address(address):
 def npt_rule_add(source_net, destination_net, interface, identifier, internal_int, url_base, key, secret):
   url = url_base + "/firewall/npt/addRule"
   req_data = { 'rule': {'enabled':1,'sequence':'1','log':'0','interface': identifier, 'source_net': source_net, 'destination_net': destination_net, 'description': interface + '<->' + internal_int + ' ' + 'dhcp6c-checkset-nptv6' } }  
+  print(req_data)
   add_req = requests.post(url, auth=(key, secret), json=req_data)
   if add_req.status_code != 200:
     raise ValueError('Status Code ' + str(add_req.status_code) + ' from URL: ' + url + ' with data ' + add_req.text)
@@ -166,6 +167,7 @@ needed_mappings = {}
 for named_int in config['lan-interfaces']:
   ## Get what's actually configured on each interface in the config
   real_int = config['lan-interfaces'][named_int]['interface']
+  print("Working on " + real_int)
   interface_data = get_current_interface_data(real_int, config['api-base'], config['api-key'], config['api-secret'])
   
   ## check every IPV6 address to see if it's in the ULA range we use 
@@ -184,6 +186,7 @@ for named_int in config['lan-interfaces']:
   if not interface_has_ula_addr:
     # not private address configured on this interface - out config doesn't
     #   matter
+    print("Interface " + real_int + "does not have a ULA Address")
     continue 
   
   ## but if we have, find all the mappings we need
