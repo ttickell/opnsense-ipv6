@@ -1,7 +1,7 @@
 checkset-ntp6v-conf-version: 0
 api-base: "https://router.home.tickell.us/api"
-api-key: "zLYZ3EUQzX1euvXmiPFh+v17xpTt7vB7ZSrL9jMGq8aNNAnZwQVY6undCiM+xCqfl617RDQAymS0RPs5"
-api-secret: "iFduPUO7Nzt0Wy/2RAeDSj0FZIUvaxaY+tnfqlfEoCQTO36Y0nkwec1PSHNafdQsWxHISX4EArDJWk84"
+api-key: ""
+api-secret: ""
 dhcp6c-pds-file: "/var/db/dhcp6c-pds.json"
 ca-bundle: "/home/tickell/tickell-us-ca.pem"
 ipv6-ula: fd03:17ac:e938::/48
