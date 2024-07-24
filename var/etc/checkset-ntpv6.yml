@@ -51,7 +51,7 @@ lan-interfaces:
         pd-id: 0
         pd-sla: 2
         pd-len: 4
-  GuestNetwork:
+  Guest:
     interface: vlan0.050
     mappings:
 #      WAN:
@@ -61,4 +61,15 @@ lan-interfaces:
       WAN2:
         pd-id: 0
         pd-sla: 4
+        pd-len: 4
+  IOT:
+    interface: vlan0.051
+    mappings:
+#      WAN:
+#        pd-id: 4
+#       pd-sla: 0
+#        pd-len: 0
+      WAN2:
+        pd-id: 0
+        pd-sla: 5
         pd-len: 4
