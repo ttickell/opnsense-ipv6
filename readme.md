@@ -134,3 +134,11 @@ Yet, part of me wants to side with the article's author and tell the world (in t
 That part of me probably needs to be dragged out back behind a barn, drawn and quartered, shot, and then suffocated.  It's not really a question of which protocol is used, it's a question of did the use case work.
 
 Right?
+
+# Well then ... (07/23/2024)
+
+A lightening strike has me rebuilding things (and regrounding things).  Converted evertyhing to to use ULA adressing in the new router and ... found this:
+
+https://www.ietf.org/archive/id/draft-ietf-6man-rfc6724-update-08.html#name-ula-ula-preferred-over-ipv4
+
+Really, the point is still, "did the connection establish?"  But forward progress to prefer IPv6 is good?
