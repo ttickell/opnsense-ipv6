@@ -25,7 +25,7 @@ fd03:17ac:e938::/48
                 fd03:17ac:e938:14::/64 <-- Guest Net  - Map PD 6, PD 0, 4/4
                 fd03:17ac:e938:15::/64 <-- IOT        - Map PD 7, PD 0, 5/4
                 fd03:17ac:e938:16::/64 <-- GAMES      - MAP PD 8, PD 0, 6/4
-                fd03:17ac:e938:17::/64
+                fd03:17ac:e938:17::/64 <-- Voya       - MAP PD 9, PD 0, 7/4
                 fd03:17ac:e938:18::/64
                 fd03:17ac:e938:19::/64
                 fd03:17ac:e938:1a::/64
