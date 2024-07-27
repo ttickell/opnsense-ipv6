@@ -10,10 +10,10 @@ lan-interfaces:
   LAN:
     interface: lagg0
     mappings:
-#      WAN:
-#        pd-id: 2
-#        pd-sla: 0
-#        pd-len: 0
+      WAN:
+        pd-id: 2
+        pd-sla: 0
+        pd-len: 0
       WAN2:
         pd-id: 0
         pd-sla: 0
@@ -21,10 +21,10 @@ lan-interfaces:
   CAM:
     interface: vlan0.200
     mappings:
-#      WAN:
-#        pd-id: 3
-#        pd-sla: 0
-#        pd-len: 0
+      WAN:
+        pd-id: 3
+        pd-sla: 0
+        pd-len: 0
       WAN2:
         pd-id: 0
         pd-sla: 1
@@ -32,10 +32,10 @@ lan-interfaces:
   OVPN:
     interface: ovpns1
     mappings:
-#      WAN:
-#        pd-id: 5
-#        pd-sla: 0
-#        pd-len: 0
+      WAN:
+        pd-id: 5
+        pd-sla: 0
+        pd-len: 0
       WAN2:
         pd-id: 0
         pd-sla: 3
@@ -43,10 +43,10 @@ lan-interfaces:
   Wiregaurd:
     interface: wg0
     mappings:
-#      WAN:
-#        pd-id: 4
-#       pd-sla: 0
-#        pd-len: 0
+      WAN:
+        pd-id: 4
+        pd-sla: 0
+        pd-len: 0
       WAN2:
         pd-id: 0
         pd-sla: 2
@@ -54,10 +54,10 @@ lan-interfaces:
   Guest:
     interface: vlan0.050
     mappings:
-#      WAN:
-#        pd-id: 6
-#       pd-sla: 0
-#        pd-len: 0
+      WAN:
+        pd-id: 6
+        pd-sla: 0
+        pd-len: 0
       WAN2:
         pd-id: 0
         pd-sla: 4
@@ -65,10 +65,10 @@ lan-interfaces:
   IOT:
     interface: vlan0.051
     mappings:
-#      WAN:
-#        pd-id: 7
-#       pd-sla: 0
-#        pd-len: 0
+      WAN:
+        pd-id: 7
+        pd-sla: 0
+        pd-len: 0
       WAN2:
         pd-id: 0
         pd-sla: 5
@@ -76,10 +76,10 @@ lan-interfaces:
   Games:
     interface: vlan0.100
     mappings:
-#      WAN:
-#        pd-id: 8
-#       pd-sla: 0
-#        pd-len: 0
+      WAN:
+        pd-id: 8
+        pd-sla: 0
+        pd-len: 0
       WAN2:
         pd-id: 0
         pd-sla: 6

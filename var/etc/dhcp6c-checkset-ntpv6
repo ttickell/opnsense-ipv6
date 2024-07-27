@@ -124,7 +124,11 @@ with open(dhcp6c_pds_file, 'r') as file:
 ## Get Interface mappings
 url = config['api-base'] + "/interfaces/overview/export"
 int_fetch = requests.get(url,auth=(config['api-key'], config['api-secret']))
+if int_fetch.status_code != 200:
+  sys.exit(int_fetch.text)
+
 int_config = json.loads(int_fetch.text)
+
 global_devices = {}
 for one in int_config:
   identifier = one['identifier']
