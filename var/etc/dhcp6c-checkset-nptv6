@@ -13,7 +13,7 @@ import sys
 ##
 
 ## modify to accept command line and environemnt variable
-config_file = "/var/etc/checkset-ntpv6.yml"
+config_file = "/var/etc/checkset-nptv6.yml"
 
 def ipv6_network_calc(avail_pds, pd_id, sla, len):
   # String of prefix delegated
