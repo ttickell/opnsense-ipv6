@@ -7,73 +7,78 @@
 #  To do this, go to "Interfaces" -> "Settings" and in the "IPv6 DHCP" options, 
 #    change the log level to "Info"
 #
-import pprint
+# Debugging flag
+DEBUG = True
+
+# Parse ISC style configuration files (i.e. the dhcp6c.conf file)
+#   https://pypi.org/project/iscpy/
+#   PIP missing - install PIP on opnsense
+#     https://pip.pypa.io/en/stable/installation/
+#   https://stackoverflow.com/questions/19212176/parsing-isc-files-with-python-dhcpd-conf-iscpy-module
+#   PyPI Version broken-instal here instead (install git first) 
+#     https://github.com/egberts/iscpy/issues/1
+
 import json
 import re
-## Parse ISC style configuration files (i.e. the dhcp6c.conf file)
-##   https://pypi.org/project/iscpy/
-##   PIP missing - install PIP on opnsense
-##     https://pip.pypa.io/en/stable/installation/
-##   https://stackoverflow.com/questions/19212176/parsing-isc-files-with-python-dhcpd-conf-iscpy-module
-##   PyPI Version broken-instal here instead (install git first) 
-##     https://github.com/egberts/iscpy/issues/1
-import iscpy
+import os
 
-logFile = "/var/log/system/latest.log"
 saveFile = "/var/db/dhcp6c-pds.json"
 dhcp6cConfFile = "/var/etc/dhcp6c.conf"
+prefixFileTemplate = "/tmp/{}_prefixv6"
 
-# Stuff we will use
+# Custom parse: extract all send ia-pd lines for each interface, merging across blocks
+iface_pdids = {}
+current_iface = None
+pd_regex = re.compile(r'^send ia-pd\s+(\d+);')
+iface_block_regex = re.compile(r'^interface\s+(\S+)\s*\{')
+with open(dhcp6cConfFile, 'r') as f:
+    for line in f:
+        line_stripped = line.strip()
+        iface_match = iface_block_regex.match(line_stripped)
+        if iface_match:
+            current_iface = iface_match.group(1)
+            if current_iface not in iface_pdids:
+                iface_pdids[current_iface] = []
+        elif current_iface:
+            match = pd_regex.match(line_stripped)
+            if match:
+                pdid = match.group(1)
+                if pdid not in iface_pdids[current_iface]:
+                    iface_pdids[current_iface].append(pdid)
+        if line_stripped.startswith('};'):
+            current_iface = None
+if DEBUG:
+    for iface, pdids in iface_pdids.items():
+        print(f"custom parse: {iface} PD IDs: {pdids}")
+
 pdDelegations = {}
 
-## Patterns we'll need for matching, below
-isDhcp6cLog = re.compile("^.* dhcp6c .*$")
-isMakePD = re.compile("^.*make an IA: PD.*$")
-isCreatePrefix = re.compile("^.* create a prefix .*$")
-isPrefixInterface = re.compile("^.*prefix-interface .*")
+for iface, pdids in iface_pdids.items():
+    prefix_file = prefixFileTemplate.format(iface)
+    if DEBUG:
+        print(f"Checking interface: {iface}")
+        print(f"  PD IDs: {pdids}")
+        print(f"  Prefix file: {prefix_file}")
+        print(f"  Exists: {os.path.exists(prefix_file)}")
+    if not os.path.exists(prefix_file):
+        if DEBUG:
+            print(f"  Prefix file for {iface} does not exist, skipping.")
+        continue
+    with open(prefix_file, 'r') as pf:
+        prefixes = [line.strip() for line in pf if line.strip()]
+    if DEBUG:
+        print(f"  Prefixes found: {prefixes}")
+    for pdid, prefix in zip(pdids, prefixes):
+        if DEBUG:
+            print(f"    Assigning prefix {prefix} to PD {pdid}")
+        pdDelegations[pdid] = {
+            "prefix": prefix,
+            "allocations": False,
+            "interfaces": {}
+        }
 
-# Load dhcp6c configuration
-with open(dhcp6cConfFile, 'r') as configHandle:
-   dhcp6cConf = iscpy.ParseISCString(configHandle.read())
-
-## extract just the dhcp6c logs since 
-## something else could have logged in between events
-logLines = []
-with open(logFile, 'r') as log:
-  for index, line in enumerate(log):
-    if (isDhcp6cLog.match(line)):
-      logLines.append(line.strip())
-
-## Look for just the PD assignments - adjacent lines look like:
-## <29>1 2024-04-16T07:15:28+00:00 router.home.tickell.us dhcp6c 16328 - [meta sequenceId="384"] make an IA: PD-7
-## <29>1 2024-04-16T07:15:28+00:00 router.home.tickell.us dhcp6c 16328 - [meta sequenceId="385"] create a prefix 2600:1700:60f0:254e::/64 pltime=3600, vltime=3600
-## PD ID is logged, first, followed by creation of the delegated prefix for the PD
-for x in range(len(logLines)):
-  if (isMakePD.match(logLines[x])):
-    pdLine = logLines[x]
-    pdLine = re.sub(r'^.* make an IA: PD-', '', pdLine)
-    x += 1
-    prefixLine = logLines[x]
-    if not isCreatePrefix.match(prefixLine):
-      continue
-    prefixLine = re.sub(r'^.* create a prefix ', '', prefixLine)
-    prefixLine = re.sub(r' .*', '', prefixLine)
-    
-    # Doesn't matter what came before, only save the newest reference 
-    pdDelegations[pdLine] = {}
-    pdDelegations[pdLine]['prefix'] = prefixLine
-    pdDelegations[pdLine]['allocations'] = False
-    pdDelegations[pdLine]['interfaces'] = {};
-   
-    #look for PD association in dhcp6c.conf
-    refString = "id-assoc pd " + pdLine
-    for confItem in dhcp6cConf[refString].keys():
-      if isPrefixInterface.match(confItem):
-        pdDelegations[pdLine]['allocations'] = True
-        interface = re.sub("^.*prefix-interface ", '', confItem)
-        pdDelegations[pdLine]['interfaces'][interface] = {}
-        pdDelegations[pdLine]['interfaces'][interface]['sla-id'] = dhcp6cConf[refString][confItem]['sla-id']
-        pdDelegations[pdLine]['interfaces'][interface]['sla-len'] = dhcp6cConf[refString][confItem]['sla-len']
+# pdDelegations is already built above from prefix files and config order
+# If you need to add interface allocation info, implement it here using your custom parser if needed.
 
 with open(saveFile, 'w+') as fileHandle:
   print(json.dumps(pdDelegations, indent=4), file=fileHandle)
