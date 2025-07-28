@@ -5,14 +5,14 @@ import subprocess
 from pathlib import Path
 
 # Files to check
-prefix_files = [Path('/igc0_prefixv6'), Path('/igc1_prefixv6')]
+prefix_files = [Path('/tmp/igc0_prefixv6'), Path('/tmp/igc1_prefixv6')]
 # State file to track last run time
 state_file = Path('/tmp/dhcp6c-prefix-checker.last')
 # Scripts to execute
-prefix_json_script = '/etc/dhcp6c-prefix-json'
-checkset_script = '/tmp/dhcp6c-checkset-nptv6'
+prefix_json_script = '/var/etc/dhcp6c-prefix-json'
+checkset_script = '/var/etc/dhcp6c-checkset-nptv6'
 # Debug flag (set to True to enable debug output)
-DEBUG = False
+DEBUG = True
 
 def get_last_run_time():
     if state_file.exists():
