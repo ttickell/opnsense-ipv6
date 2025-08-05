@@ -1,13 +1,17 @@
 #!/bin/sh
-
-
+##
+## hard link this scrript to "<interface>_dhcp6.sh" for each interface calling it 
+## from dhcp6c.conf
+## 
+## update this block to reference how the script is called for $0 from that config
+##
 if [ -z "$INTERFACE" ]; then
 	case $0 in
 		/var/etc/igc0_dhcp6c.sh)
-			INTERFACE=igc0
+			export INTERFACE=igc0
 		;;
 		/var/etc/igc1_dhcp6c.sh)
-			INTERFACE=igc1
+			export INTERFACE=igc1
 		;;
 	esac	
 fi
