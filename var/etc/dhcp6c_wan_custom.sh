@@ -1,5 +1,21 @@
 #!/bin/sh
 
+
+if [ -z "$INTERFACE" ]; then
+	case $0 in
+		/var/etc/igc0_dhcp6c.sh)
+			INTERFACE=igc0
+		;;
+		/var/etc/igc1_dhcp6c.sh)
+			INTERFACE=igc1
+		;;
+	esac	
+fi
+
+echo "------------------------------------" >> /tmp/dhcp6c_wan_custom.log
+echo "$(date) dhcp6c_custom_wan.sh start" >> /tmp/dhcp6c_wan_custom.log
+env >> /tmp/dhcp6c_wan_custom.log
+
 if [ -z "$INTERFACE" ]; then
     /usr/bin/logger -t dhcp6c "dhcp6c_script: INTERFACE is null: EXIT"
     exit 1
