@@ -15,7 +15,7 @@ import sys
 ## modify to accept command line and environemnt variable
 config_file = "/var/etc/checkset-nptv6.yml"
 
-def ipv6_network_calc(avail_pds, pd_id, sla, len):
+def ipv6_network_calc(avail_pds, pd_id, sla, prefix_len):
   # String of prefix delegated
   try:
     pd = avail_pds[str(pd_id)]['prefix']
@@ -30,10 +30,16 @@ def ipv6_network_calc(avail_pds, pd_id, sla, len):
     sys.exit()
   # network object from that string
   pd = ipaddress.IPv6Network(pd, True)
-  # Get subnets from that delegated prefix with length of len 
+  # Get subnets from that delegated prefix with length of prefix_len 
   #   and return the one in position SLA
-  subnet = list(pd.subnets(len))[sla]
-  return(str(subnet))
+  if prefix_len == 0:
+    # Return the original prefix if no subnetting requested
+    return str(pd)
+  else:
+    # Calculate target prefix length and subnet
+    target_prefix_len = pd.prefixlen + prefix_len
+    subnet = list(pd.subnets(new_prefix=target_prefix_len))[sla]
+    return(str(subnet))
 
 def ipv6_in_ula(ula, address):
   ula = ipaddress.IPv6Network(ula)
@@ -116,7 +122,14 @@ if 'ca-bundle' in config:
   os.environ['REQUESTS_CA_BUNDLE'] = config['ca-bundle']
 
 with open(dhcp6c_pds_file, 'r') as file:
-  dhcp6c_pds = json.load(file)
+  dhcp6c_pds_raw = json.load(file)
+
+# Handle both old format (direct PD data) and new format (with summary)
+if "prefix_delegations" in dhcp6c_pds_raw:
+    dhcp6c_pds = dhcp6c_pds_raw["prefix_delegations"]
+else:
+    # Assume old format - direct PD data
+    dhcp6c_pds = dhcp6c_pds_raw
 
 # Phase 2 to save this
 #merged_state = dhcp6c_pds 

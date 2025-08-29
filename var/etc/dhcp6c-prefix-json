@@ -21,10 +21,30 @@ DEBUG = True
 import json
 import re
 import os
+from datetime import datetime
 
 saveFile = "/var/db/dhcp6c-pds.json"
 dhcp6cConfFile = "/var/etc/dhcp6c.conf"
 prefixFileTemplate = "/tmp/{}_prefixv6"
+
+# Load existing data if it exists
+existing_pd_data = {}
+if os.path.exists(saveFile):
+    try:
+        with open(saveFile, 'r') as f:
+            loaded_data = json.load(f)
+        # Handle both old format (direct PD data) and new format (with summary)
+        if "prefix_delegations" in loaded_data:
+            existing_pd_data = loaded_data["prefix_delegations"]
+        else:
+            # Assume old format - direct PD data
+            existing_pd_data = loaded_data
+        if DEBUG:
+            print(f"Loaded existing data with {len(existing_pd_data)} PD entries")
+    except (json.JSONDecodeError, IOError) as e:
+        if DEBUG:
+            print(f"Could not load existing JSON file: {e}")
+        existing_pd_data = {}
 
 # Custom parse: extract all send ia-pd lines for each interface, merging across blocks
 iface_pdids = {}
@@ -51,7 +71,9 @@ if DEBUG:
     for iface, pdids in iface_pdids.items():
         print(f"custom parse: {iface} PD IDs: {pdids}")
 
-pdDelegations = {}
+# Start with existing data to preserve historical prefixes
+pdDelegations = existing_pd_data.copy()
+current_timestamp = datetime.now().isoformat()
 
 for iface, pdids in iface_pdids.items():
     prefix_file = prefixFileTemplate.format(iface)
@@ -60,25 +82,78 @@ for iface, pdids in iface_pdids.items():
         print(f"  PD IDs: {pdids}")
         print(f"  Prefix file: {prefix_file}")
         print(f"  Exists: {os.path.exists(prefix_file)}")
+    
     if not os.path.exists(prefix_file):
         if DEBUG:
-            print(f"  Prefix file for {iface} does not exist, skipping.")
+            print(f"  Prefix file for {iface} does not exist, preserving existing data if any.")
+        # Mark existing PD entries for this interface as potentially stale
+        for pdid in pdids:
+            if pdid in pdDelegations:
+                if "last_seen" not in pdDelegations[pdid]:
+                    pdDelegations[pdid]["last_seen"] = current_timestamp
+                pdDelegations[pdid]["status"] = "prefix_file_missing"
+                if DEBUG:
+                    print(f"    Preserved existing PD {pdid}: {pdDelegations[pdid]['prefix']}")
         continue
+    
     with open(prefix_file, 'r') as pf:
         prefixes = [line.strip() for line in pf if line.strip()]
     if DEBUG:
         print(f"  Prefixes found: {prefixes}")
+    
     for pdid, prefix in zip(pdids, prefixes):
         if DEBUG:
-            print(f"    Assigning prefix {prefix} to PD {pdid}")
-        pdDelegations[pdid] = {
-            "prefix": prefix,
-            "allocations": False,
-            "interfaces": {}
-        }
+            print(f"    Processing prefix {prefix} for PD {pdid}")
+        
+        # Update or create PD entry
+        if pdid in pdDelegations:
+            # Check if prefix has changed
+            if pdDelegations[pdid]["prefix"] != prefix:
+                if DEBUG:
+                    print(f"    Prefix changed for PD {pdid}: {pdDelegations[pdid]['prefix']} -> {prefix}")
+                # Store previous prefix in history
+                if "prefix_history" not in pdDelegations[pdid]:
+                    pdDelegations[pdid]["prefix_history"] = []
+                pdDelegations[pdid]["prefix_history"].append({
+                    "prefix": pdDelegations[pdid]["prefix"],
+                    "timestamp": pdDelegations[pdid].get("last_updated", "unknown")
+                })
+                pdDelegations[pdid]["prefix"] = prefix
+            pdDelegations[pdid]["status"] = "active"
+            pdDelegations[pdid]["last_updated"] = current_timestamp
+            pdDelegations[pdid]["interface"] = iface
+        else:
+            if DEBUG:
+                print(f"    Creating new PD entry for {pdid}")
+            pdDelegations[pdid] = {
+                "prefix": prefix,
+                "interface": iface,
+                "allocations": False,
+                "interfaces": {},
+                "status": "active",
+                "created": current_timestamp,
+                "last_updated": current_timestamp
+            }
+
+# Add summary information to the output
+summary = {
+    "total_pds": len(pdDelegations),
+    "active_pds": len([pd for pd in pdDelegations.values() if pd.get("status") == "active"]),
+    "missing_prefix_files": len([pd for pd in pdDelegations.values() if pd.get("status") == "prefix_file_missing"]),
+    "last_run": current_timestamp
+}
+
+output_data = {
+    "summary": summary,
+    "prefix_delegations": pdDelegations
+}
 
 # pdDelegations is already built above from prefix files and config order
 # If you need to add interface allocation info, implement it here using your custom parser if needed.
 
+if DEBUG:
+    print(f"Writing {len(pdDelegations)} PD entries to {saveFile}")
+    print(f"Summary: {summary}")
+
 with open(saveFile, 'w+') as fileHandle:
-  print(json.dumps(pdDelegations, indent=4), file=fileHandle)
+  print(json.dumps(output_data, indent=4), file=fileHandle)
