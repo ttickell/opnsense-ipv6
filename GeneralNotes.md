@@ -38,8 +38,8 @@ fd03:17ac:e938::/48
             fd03:17ac:e938:20::/60
             fd03:17ac:e938:30::/60
 
-          fd03:17ac:e938:40::/58 <-- TestNet1 Delegation
-          fd03:17ac:e938:80::/58 <-- TestNet2 Delegation
+          fd03:17ac:e938:40::/58 
+          fd03:17ac:e938:80::/58 
           fd03:17ac:e938:c0::/58
 
         fd03:17ac:e938:100::/56
@@ -62,6 +62,6 @@ fd03:17ac:e938::/48
     fd03:17ac:e938:2000::/52
     fd03:17ac:e938:3000::/52
 
-  fd03:17ac:e938:4000::/50
+  fd03:17ac:e938:4000::/50 <-- Test Net Delegation - /56 for everyone
   fd03:17ac:e938:8000::/50
   fd03:17ac:e938:c000::/50
