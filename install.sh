@@ -84,7 +84,13 @@ fi
 echo ""
 echo "Creating interface-specific dhcp6c wrapper symlinks from GUI mappings..."
 for gui_if in wan wan2; do
-    real_if=$(/usr/local/bin/php -r 'require_once("config.inc"); require_once("interfaces.inc"); $if=get_real_interface($argv[1], "inet6"); if (!empty($if)) { echo $if; }' "${gui_if}" 2>/dev/null || true)
+    real_if=$(/usr/local/bin/php -d display_errors=0 -r 'require_once("/etc/inc/config.inc"); require_once("/etc/inc/interfaces.inc"); $if=get_real_interface($argv[1], "inet6"); if (is_string($if) && $if !== "") { echo $if; }' "${gui_if}" 2>/dev/null || true)
+    case "${real_if}" in
+        ''|*[!A-Za-z0-9_.:-]*)
+            echo "  WARN: could not resolve valid real interface for ${gui_if}; create wrapper symlink manually if needed"
+            continue
+            ;;
+    esac
     if [ -n "${real_if}" ]; then
         ln -sf /usr/local/bin/dhcp6c_interface_wrapper.sh "/usr/local/bin/dhcp6c_${real_if}.sh"
         echo "  ${gui_if} -> ${real_if} -> /usr/local/bin/dhcp6c_${real_if}.sh"
@@ -100,4 +106,7 @@ echo "  /usr/local/etc/dhcp6c_wan.conf.custom   = COMCAST/XFINITY role (ia-pd 0,
 echo "  /usr/local/etc/dhcp6c_wan2.conf.custom  = AT&T role (ia-pd 2..8)"
 echo "Assign to WAN/WAN2 based on your provider mapping (swap if providers are wired opposite)."
 echo "OPNsense substitutes {interface} at startup and merges per-interface configs into /var/etc/dhcp6c.conf."
+echo "If wrapper auto-detect fails, manually create symlinks (example):"
+echo "  ln -sf /usr/local/bin/dhcp6c_interface_wrapper.sh /usr/local/bin/dhcp6c_vtnet0.sh"
+echo "  ln -sf /usr/local/bin/dhcp6c_interface_wrapper.sh /usr/local/bin/dhcp6c_vtnet1.sh"
 echo "Run 'sh preflight-check.sh' to verify the full environment."

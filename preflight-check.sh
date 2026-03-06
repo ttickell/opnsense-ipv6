@@ -89,7 +89,13 @@ done
 
 ## ── dhcp6c real-interface wrapper links ─────────────────────────────────────
 for gui_if in wan wan2; do
-    real_if=$(/usr/local/bin/php -r 'require_once("config.inc"); require_once("interfaces.inc"); $if=get_real_interface($argv[1], "inet6"); if (!empty($if)) { echo $if; }' "${gui_if}" 2>/dev/null || true)
+    real_if=$(/usr/local/bin/php -d display_errors=0 -r 'require_once("/etc/inc/config.inc"); require_once("/etc/inc/interfaces.inc"); $if=get_real_interface($argv[1], "inet6"); if (is_string($if) && $if !== "") { echo $if; }' "${gui_if}" 2>/dev/null || true)
+    case "${real_if}" in
+        ''|*[!A-Za-z0-9_.:-]*)
+            warn "Could not resolve valid real interface for ${gui_if}"
+            continue
+            ;;
+    esac
     if [ -n "${real_if}" ]; then
         link_path="/usr/local/bin/dhcp6c_${real_if}.sh"
         if [ -L "${link_path}" ] || [ -x "${link_path}" ]; then
