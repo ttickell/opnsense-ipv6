@@ -99,12 +99,69 @@ root@router:/var/db # cat dhcp6c-pds.json
 }
 ```
 # Summation of Goal
-* Make DHCP6C get prefix delegations for both providers (see var/etc/dhcp6c.conf.custom)
-* Have access to that information (see var/etc/dhcp6-prefix-json)
-* Create additional tooling to manage NPT for failover states (see var/etc/dhcp6c-checkset-nptv6)
-  * Added note: Chain these scripts from the script in dhcp6c.conf to pick up state changes 
+* Make DHCP6C get prefix delegations for both providers (see `usr/local/etc/dhcp6c_wan.conf.custom` and `usr/local/etc/dhcp6c_wan2.conf.custom`)
+* Have access to that information (see `usr/local/bin/dhcp6c-prefix-json`)
+* Manage NPTv6 rules for failover states (see `usr/local/bin/dhcp6c-checkset-nptv6`)
+  * Chain these scripts from the dhcp6c hook scripts in `usr/local/bin/` to pick up state changes
 * Pull some cables and see if it actually works (TBD)
-* Package this up into something consumable. 
+* Package this up into something consumable.
+
+# Installation
+
+Clone the repo on your OPNsense node and run the install script as root:
+
+```sh
+git clone https://github.com/ttickell/opnsense-ipv6.git /usr/local/opnsense-ipv6
+cd /usr/local/opnsense-ipv6
+
+# Check all prerequisites first
+sh preflight-check.sh
+
+# Install scripts and config
+sh install.sh
+```
+
+After install:
+
+1. Edit `/usr/local/etc/checkset-nptv6.yml` — fill in `api-base`, `api-key`, `api-secret`,
+   `ipv6-ula`, and `lan-interfaces` (see `usr/local/etc/checkset-nptv6.yml.example` for
+   field-by-field documentation).
+
+2. In the OPNsense GUI, navigate to **Interfaces → Settings → IPv6 DHCP** and set
+   **Log level** to **Info**.  This passes the `-d` flag to `dhcp6c`, which causes it to
+   write the per-interface prefix files that `dhcp6c-prefix-json` reads.
+
+3. In the OPNsense GUI, for each WAN interface, navigate to
+    **Interfaces → [WAN interface] → DHCPv6 Client**, enable **Override the configuration
+    for this interface**, and assign override files by **provider role placeholder**:
+    - `dhcp6c_wan.conf.custom` = **COMCAST / XFINITY role** (`ia-pd 0,1`)
+    - `dhcp6c_wan2.conf.custom` = **AT&T role** (`ia-pd 2..8`)
+
+    If your physical/provider wiring is swapped (for example AT&T is GUI WAN and
+    Comcast is GUI WAN2), swap which file is assigned to each GUI interface.
+
+    OPNsense writes each override into `/var/etc/dhcp6c_<interface>.conf` and then
+    concatenates those files into `/var/etc/dhcp6c.conf` for the single running `dhcp6c`
+    process. It substitutes `{interface}` with the real device name (e.g. `vtnet0`, `igc0`)
+    during this render step. Keeping one interface block per override file avoids duplicate
+    stanzas in the merged runtime config.
+
+4. Restart the DHCPv6 client:
+   **Interfaces → Diagnostics → Restart → DHCPv6 Client**
+
+## Installed File Locations
+
+| File | Purpose |
+|---|---|
+| `/usr/local/etc/dhcp6c_wan.conf.custom` | DHCPv6 override template for GUI interface WAN |
+| `/usr/local/etc/dhcp6c_wan2.conf.custom` | DHCPv6 override template for GUI interface WAN2 |
+| `/usr/local/etc/checkset-nptv6.yml` | Site config for NPTv6 script (API creds + interface map) |
+| `/usr/local/bin/dhcp6c_wan_custom.sh` | dhcp6c exit hook — updates resolvers and triggers `newipv6` |
+| `/usr/local/bin/dhcp6c_interface_wrapper.sh` | Wrapper target; symlinked as `dhcp6c_<real_if>.sh` at install/startup |
+| `/usr/local/bin/dhcp6c-prefix-json` | Writes current PD state to `/var/db/dhcp6c-pds.json` |
+| `/usr/local/bin/dhcp6c-checkset-nptv6` | Reconciles OPNsense NPTv6 rules with current PD state |
+| `/usr/local/bin/dhcp6c-ula-mapping.py` | Orchestrator — triggers pipeline when prefix files change |
+| `/var/db/dhcp6c-pds.json` | Runtime state — prefix delegation history (persistent) |
 
 Let's see how this goes.
 

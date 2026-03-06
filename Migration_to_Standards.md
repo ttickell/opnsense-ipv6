@@ -1,30 +1,43 @@
 # OPNsense DHCPv6 Configuration Migration to Standards
 
-## Overview
+## Status
 
-This document outlines the migration from improper use of `/var/etc/` (generated configuration directory) to proper persistent configuration locations in OPNsense. The current configuration works but is vulnerable to being overwritten during updates.
+**Migration complete** — all production artifacts now live under `usr/local/` in this
+repository.  Legacy `var/etc/` experimental files are removed from this branch to prevent
+accidental test-path fallback.
 
-## Problem Analysis
+| Artifact | Old (legacy, do not install) | Current (install this) |
+|---|---|---|
+| dhcp6c config (WAN) | `var/etc/dhcp6c.conf.custom` | `usr/local/etc/dhcp6c_wan.conf.custom` |
+| dhcp6c config (WAN2) | `var/etc/dhcp6c.conf.custom` | `usr/local/etc/dhcp6c_wan2.conf.custom` |
+| Site config | `var/etc/checkset-nptv6.yml` | `usr/local/etc/checkset-nptv6.yml` (from `.example`) |
+| WAN hook | `var/etc/dhcp6c_wan_custom.sh` | `usr/local/bin/dhcp6c_wan_custom.sh` |
+| interface wrapper | *(not shipped)* | `usr/local/bin/dhcp6c_interface_wrapper.sh` + generated `dhcp6c_<real_if>.sh` symlinks |
+| Prefix JSON | `var/etc/dhcp6c-prefix-json` | `usr/local/bin/dhcp6c-prefix-json` |
+| NPTv6 mgmt | `var/etc/dhcp6c-checkset-nptv6` | `usr/local/bin/dhcp6c-checkset-nptv6` |
+| Orchestrator | `var/etc/dhcp6c-ula-mapping.py` | `usr/local/bin/dhcp6c-ula-mapping.py` |
 
-### What Was Wrong
+Use `install.sh` from the repo root to deploy.  Run `preflight-check.sh` first.
 
-1. **Wrong Configuration Location**
-   - **Problem:** Configuration placed in `/var/etc/dhcp6c.conf.custom`
-   - **Issue:** `/var/etc/` is OPNsense's generated configuration directory - files get overwritten
-   - **Evidence:** Configuration gets lost during template regeneration
+OPNsense startup behavior (verified in `opnsense-core/src/etc/inc/interfaces.inc`):
+- Per-interface override file content is written to `/var/etc/dhcp6c_<interface>.conf`
+- OPNsense concatenates those files into `/var/etc/dhcp6c.conf`
+- A single `dhcp6c` process is started with `-c /var/etc/dhcp6c.conf`
 
-2. **Scripts in Volatile Directory**
-   - **Problem:** Scripts placed in `/var/etc/`:
-     - `dhcp6c_wan_custom.sh`
-     - `dhcp6c-prefix-json`
-     - `dhcp6c-checkset-nptv6`
-   - **Issue:** These get overwritten during OPNsense updates
+Because of this merge behavior, each override file should contain exactly one interface block.
 
-3. **Configuration Complexity Fighting GUI**
-   - **Problem:** Complex multi-PD configuration conflicts with OPNsense expectations
-   - **Issue:** Template system doesn't expect custom DHCPv6 client configurations
+Current template model:
+- `dhcp6c_wan.conf.custom` is assigned to GUI interface **WAN**
+- `dhcp6c_wan2.conf.custom` is assigned to GUI interface **WAN2**
+- Both files use `{interface}` placeholders so OPNsense resolves real device names (e.g. `vtnet0`, `igc1`) at render time.
 
-## Solution: Proper OPNsense Integration
+Note: legacy sections lower in this document are retained for migration history and may reference the older single-file naming (`dhcp6c.conf.custom`). Treat the status/model section above as canonical.
+
+---
+
+## Background — Why `/var/etc/` Was Wrong
+
+
 
 ### File Location Changes
 
@@ -34,8 +47,8 @@ This document outlines the migration from improper use of `/var/etc/` (generated
 | `/var/etc/dhcp6c_wan_custom.sh` | `/usr/local/bin/dhcp6c_wan_custom.sh` | Hook script |
 | `/var/etc/dhcp6c-prefix-json` | `/usr/local/bin/dhcp6c-prefix-json` | Prefix tracking |
 | `/var/etc/dhcp6c-checkset-nptv6` | `/usr/local/bin/dhcp6c-checkset-nptv6` | NPTv6 management |
-| N/A | `/usr/local/bin/igc0_dhcp6c.sh` | Interface-specific hook |
-| N/A | `/usr/local/bin/igc1_dhcp6c.sh` | Interface-specific hook |
+| N/A | `/usr/local/bin/dhcp6c_interface_wrapper.sh` | Interface wrapper target |
+| N/A | `/usr/local/bin/dhcp6c_<real_if>.sh` | Interface-specific symlink generated from WAN/WAN2 mapping |
 
 ## Configuration File Changes
 

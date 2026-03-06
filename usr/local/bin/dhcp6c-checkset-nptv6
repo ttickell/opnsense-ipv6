@@ -1,0 +1,369 @@
+#!/usr/local/bin/python3
+#
+# dhcp6c-checkset-nptv6 — reconcile OPNsense NPTv6 rules with current PD state
+#
+# Reads the delegated-prefix JSON produced by dhcp6c-prefix-json and the
+# site configuration from checkset-nptv6.yml.  For every LAN interface defined
+# in the config it determines the correct public-prefix mapping based on current
+# PDs, then converges the OPNsense NPTv6 firewall rules to match: adding rules
+# that are missing and deleting rules that are no longer needed.
+#
+# The reconciliation loop is idempotent: running the script multiple times with
+# no change in PD state or config produces zero API mutations.
+#
+# DEPENDENCIES
+# ------------
+# python3 packages:  pyyaml  requests
+# Install:  pkg install py311-pyyaml py311-requests   (adjust python version)
+#
+# CONFIGURATION
+# -------------
+# /usr/local/etc/checkset-nptv6.yml   (copy from .example and fill in values)
+#
+# INSTALL
+# -------
+# /usr/local/bin/dhcp6c-checkset-nptv6   (chmod 755)
+#
+# SYSLOG TAG:  dhcp6c-nptv6
+
+import sys
+import os
+
+# ---------------------------------------------------------------------------
+# Dependency preflight — produce a clear error before an ImportError
+# ---------------------------------------------------------------------------
+
+_missing: list = []
+try:
+    import yaml
+except ImportError:
+    _missing.append("pyyaml  (install: pkg install py311-pyyaml)")
+try:
+    import requests
+except ImportError:
+    _missing.append("requests  (install: pkg install py311-requests)")
+
+if _missing:
+    import syslog as _sl
+    _sl.openlog("dhcp6c-nptv6", _sl.LOG_PID, _sl.LOG_DAEMON)
+    for _dep in _missing:
+        msg = f"Missing required Python package: {_dep}"
+        _sl.syslog(_sl.LOG_CRIT, msg)
+        print(msg, file=sys.stderr)
+    sys.exit(1)
+
+# All imports are available
+import json
+import ipaddress
+import syslog
+from typing import Optional
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+CONFIG_FILE     = "/usr/local/etc/checkset-nptv6.yml"
+REQUEST_TIMEOUT = 15     # seconds for all OPNsense API calls
+MAX_RETRIES     = 3
+
+SYSLOG_TAG = "dhcp6c-nptv6"
+syslog.openlog(SYSLOG_TAG, syslog.LOG_PID, syslog.LOG_DAEMON)
+
+# ---------------------------------------------------------------------------
+# Logging helpers
+# ---------------------------------------------------------------------------
+
+
+def log_info(msg: str) -> None:
+    syslog.syslog(syslog.LOG_INFO, msg)
+
+
+def log_warn(msg: str) -> None:
+    syslog.syslog(syslog.LOG_WARNING, msg)
+
+
+def log_err(msg: str) -> None:
+    syslog.syslog(syslog.LOG_ERR, msg)
+
+
+# ---------------------------------------------------------------------------
+# Config validation
+# ---------------------------------------------------------------------------
+
+REQUIRED_KEYS = ["api-base", "api-key", "api-secret", "dhcp6c-pds-file", "ipv6-ula"]
+
+
+def validate_config(cfg: dict) -> None:
+    missing = [k for k in REQUIRED_KEYS if not cfg.get(k)]
+    if missing:
+        log_err(f"Config {CONFIG_FILE} is missing required keys: {missing}")
+        sys.exit(1)
+    for placeholder in ["YOUR-OPNSENSE-HOST", "YOUR-API-KEY", "YOUR-API-SECRET", "fdXX"]:
+        for k in ("api-base", "api-key", "api-secret", "ipv6-ula"):
+            if placeholder in str(cfg.get(k, "")):
+                log_err(f"Config {CONFIG_FILE} key '{k}' still contains placeholder value")
+                sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# API helpers with timeout and retry
+# ---------------------------------------------------------------------------
+
+def _api_get(url: str, auth: tuple, retries: int = MAX_RETRIES) -> dict:
+    last_exc = None
+    for attempt in range(1, retries + 1):
+        try:
+            resp = requests.get(url, auth=auth, timeout=REQUEST_TIMEOUT, verify=True)
+            resp.raise_for_status()
+            return resp.json()
+        except (requests.RequestException, ValueError) as exc:
+            last_exc = exc
+            log_warn(f"GET {url} attempt {attempt}/{retries} failed: {exc}")
+    log_err(f"GET {url} failed after {retries} attempts: {last_exc}")
+    raise RuntimeError(f"API GET failed: {url}") from last_exc
+
+
+def _api_post(url: str, auth: tuple, data: dict, retries: int = MAX_RETRIES) -> dict:
+    last_exc = None
+    for attempt in range(1, retries + 1):
+        try:
+            resp = requests.post(url, auth=auth, json=data,
+                                 timeout=REQUEST_TIMEOUT, verify=True)
+            resp.raise_for_status()
+            result = resp.json()
+            if isinstance(result, dict) and result.get("result") == "failed":
+                raise ValueError(f"API returned result=failed: {result}")
+            return result
+        except (requests.RequestException, ValueError) as exc:
+            last_exc = exc
+            log_warn(f"POST {url} attempt {attempt}/{retries} failed: {exc}")
+    log_err(f"POST {url} failed after {retries} attempts: {last_exc}")
+    raise RuntimeError(f"API POST failed: {url}") from last_exc
+
+
+# ---------------------------------------------------------------------------
+# IPv6 helpers
+# ---------------------------------------------------------------------------
+
+def ipv6_network_calc(avail_pds: dict, pd_id: int, sla: int, prefix_len: int) -> Optional[str]:
+    """Return the target IPv6 network string derived from a PD entry."""
+    entry = avail_pds.get(str(pd_id))
+    if not entry:
+        log_err(f"PD id {pd_id} not found in state file — check your config")
+        return None
+    pd_net = ipaddress.IPv6Network(entry["prefix"], strict=True)
+    if prefix_len == 0:
+        return str(pd_net)
+    target_len = pd_net.prefixlen + prefix_len
+    subnets = list(pd_net.subnets(new_prefix=target_len))
+    if sla >= len(subnets):
+        log_err(f"PD {pd_id}: SLA index {sla} out of range for prefix_len {prefix_len}")
+        return None
+    return str(subnets[sla])
+
+
+def ipv6_in_ula(ula_prefix: str, address: str) -> bool:
+    ula_net = ipaddress.IPv6Network(ula_prefix, strict=False)
+    iface   = ipaddress.IPv6Interface(address)
+    return iface.ip in ula_net
+
+
+def ipv6_network_from_interface(address: str) -> str:
+    return str(ipaddress.IPv6Interface(address).network)
+
+
+# ---------------------------------------------------------------------------
+# NPTv6 API operations
+# ---------------------------------------------------------------------------
+
+def npt_rule_add(source_net: str, dest_net: str, wan_iface_identifier: str,
+                 lan_label: str, wan_label: str,
+                 url_base: str, key: str, secret: str) -> None:
+    url  = url_base + "/firewall/npt/addRule"
+    desc = f"{lan_label}<->{wan_label} dhcp6c-checkset-nptv6"
+    body = {"rule": {
+        "enabled": 1, "sequence": "1", "log": "0",
+        "interface":       wan_iface_identifier,
+        "source_net":      source_net,
+        "destination_net": dest_net,
+        "description":     desc,
+    }}
+    _api_post(url, (key, secret), body)
+    log_info(f"Added NPTv6 rule: {source_net} <-> {dest_net} via {wan_iface_identifier}")
+
+
+def npt_rule_del(uuid: str, url_base: str, key: str, secret: str) -> None:
+    url = url_base + f"/firewall/npt/delRule/{uuid}"
+    _api_post(url, (key, secret), {})
+    log_info(f"Deleted NPTv6 rule uuid={uuid}")
+
+
+def npt_rule_apply(url_base: str, key: str, secret: str) -> None:
+    url = url_base + "/firewall/npt/apply"
+    _api_post(url, (key, secret), {})
+    log_info("Applied NPTv6 rule changes")
+
+
+# ---------------------------------------------------------------------------
+# Main reconciliation
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    # --- Load and validate config --------------------------------------------
+    if not os.path.exists(CONFIG_FILE):
+        log_err(f"Configuration file not found: {CONFIG_FILE} "
+                f"(copy from {CONFIG_FILE}.example and fill in values)")
+        sys.exit(1)
+
+    with open(CONFIG_FILE, "r") as fh:
+        config = yaml.safe_load(fh)
+
+    validate_config(config)
+
+    url_base    = config["api-base"]
+    api_key     = config["api-key"]
+    api_secret  = config["api-secret"]
+    pds_file    = config["dhcp6c-pds-file"]
+    ula_prefix  = config["ipv6-ula"]
+
+    if "ca-bundle" in config:
+        os.environ["REQUESTS_CA_BUNDLE"] = config["ca-bundle"]
+
+    # --- Load PD state -------------------------------------------------------
+    if not os.path.exists(pds_file):
+        log_err(f"PD state file not found: {pds_file} — run dhcp6c-prefix-json first")
+        sys.exit(1)
+
+    with open(pds_file, "r") as fh:
+        raw = json.load(fh)
+
+    avail_pds = raw.get("prefix_delegations", raw)   # handle old + new format
+
+    active_pds = {k: v for k, v in avail_pds.items() if v.get("status") == "active"}
+    if not active_pds:
+        log_warn("No active prefix delegations found — nothing to reconcile")
+        sys.exit(0)
+
+    log_info(f"Reconciling NPTv6 rules against {len(active_pds)} active PD(s)")
+
+    # --- Fetch OPNsense interface map ----------------------------------------
+    iface_map   = _api_get(url_base + "/interfaces/overview/export", (api_key, api_secret))
+    global_devs: dict = {}
+    for entry in iface_map:
+        identifier  = entry.get("identifier") or entry.get("device", "")
+        device      = entry.get("device", "")
+        description = entry.get("description", "")
+        global_devs[description] = {"device": device, "identifier": identifier}
+
+    # --- Fetch current NPTv6 rules -------------------------------------------
+    npt_config = _api_get(url_base + "/firewall/npt/searchRule", (api_key, api_secret))
+
+    # Mark every existing rule as invalid until we find a matching desired rule.
+    # Anything still marked invalid at the end is stale and will be deleted.
+    for row in npt_config.get("rows", []):
+        row["_desired"] = False
+
+    # --- Compute desired state -----------------------------------------------
+    rules_added   = 0
+    rules_skipped = 0
+    apply_needed  = False
+
+    for lan_label, lan_cfg in config.get("lan-interfaces", {}).items():
+        real_iface = lan_cfg.get("interface")
+        if not real_iface:
+            log_warn(f"lan-interfaces.{lan_label} missing 'interface' key — skipping")
+            continue
+
+        # Query current interface state from OPNsense
+        try:
+            iface_data = _api_get(
+                url_base + f"/interfaces/overview/getInterface/{real_iface}",
+                (api_key, api_secret),
+            )
+        except RuntimeError as exc:
+            log_warn(f"Could not fetch interface data for {real_iface}: {exc} — skipping")
+            continue
+
+        # Find the ULA address currently assigned to this interface
+        ula_addr = None
+        for item in iface_data.get("message", {}).get("ipv6", {}).get("value", []):
+            addr = item.get("ipaddr", "")
+            if addr and ipv6_in_ula(ula_prefix, addr):
+                ula_addr = addr
+                break
+
+        if not ula_addr:
+            log_info(f"{lan_label} ({real_iface}): no ULA address — skipping")
+            continue
+
+        source_net = ipv6_network_from_interface(ula_addr)
+        log_info(f"{lan_label} ({real_iface}): ULA source net {source_net}")
+
+        for wan_label, mapping in lan_cfg.get("mappings", {}).items():
+            pd_id      = mapping.get("pd-id")
+            pd_sla     = mapping.get("pd-sla", 0)
+            pd_len     = mapping.get("pd-len", 0)
+
+            dest_net = ipv6_network_calc(active_pds, pd_id, pd_sla, pd_len)
+            if dest_net is None:
+                log_warn(f"  {wan_label}: could not compute dest_net for pd-id={pd_id} — skipping")
+                continue
+
+            # Check if this exact rule already exists
+            existing_row = None
+            for row in npt_config.get("rows", []):
+                if row.get("source_net") == source_net and row.get("destination_net") == dest_net:
+                    existing_row = row
+                    break
+
+            if existing_row is not None:
+                existing_row["_desired"] = True
+                rules_skipped += 1
+                log_info(f"  {wan_label}: rule {source_net} <-> {dest_net} already correct")
+            else:
+                wan_dev = global_devs.get(wan_label, {})
+                identifier = wan_dev.get("identifier")
+                if not identifier:
+                    log_warn(f"  {wan_label}: OPNsense interface not found in interface export — skipping add")
+                    continue
+                try:
+                    npt_rule_add(source_net, dest_net, identifier, lan_label, wan_label,
+                                 url_base, api_key, api_secret)
+                    rules_added += 1
+                    apply_needed = True
+                except RuntimeError as exc:
+                    log_err(f"  {wan_label}: failed to add rule {source_net} <-> {dest_net}: {exc}")
+
+    # --- Apply if anything was added -----------------------------------------
+    if apply_needed:
+        try:
+            npt_rule_apply(url_base, api_key, api_secret)
+        except RuntimeError as exc:
+            log_err(f"Failed to apply NPTv6 changes: {exc}")
+
+    # --- Delete stale rules ---------------------------------------------------
+    rules_deleted = 0
+    for row in npt_config.get("rows", []):
+        if not row.get("_desired", False):
+            uuid = row.get("uuid", "")
+            try:
+                npt_rule_del(uuid, url_base, api_key, api_secret)
+                rules_deleted += 1
+                apply_needed = True
+            except RuntimeError as exc:
+                log_err(f"Failed to delete stale rule uuid={uuid}: {exc}")
+
+    if rules_deleted:
+        try:
+            npt_rule_apply(url_base, api_key, api_secret)
+        except RuntimeError as exc:
+            log_err(f"Failed to apply NPTv6 cleanup: {exc}")
+
+    log_info(
+        f"Reconciliation complete: {rules_added} added, "
+        f"{rules_skipped} unchanged, {rules_deleted} deleted"
+    )
+
+
+if __name__ == "__main__":
+    main()

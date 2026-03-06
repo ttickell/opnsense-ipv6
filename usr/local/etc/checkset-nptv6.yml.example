@@ -1,0 +1,79 @@
+# checkset-nptv6.yml — runtime configuration for dhcp6c-checkset-nptv6
+#
+# SETUP INSTRUCTIONS
+# ------------------
+# 1. Copy this file to /usr/local/etc/checkset-nptv6.yml
+# 2. Fill in your site-specific values (marked REQUIRED below)
+# 3. Keep the filled-in file out of source control — it contains API credentials
+#    (add /usr/local/etc/checkset-nptv6.yml to your .gitignore / backup strategy)
+#
+# After editing, validate with:
+#   python3 -c "import yaml; yaml.safe_load(open('/usr/local/etc/checkset-nptv6.yml'))"
+#
+# REQUIRED: bump this if you add new required keys in a future version
+checkset-ntp6v-conf-version: 0
+
+# REQUIRED: OPNsense API endpoint — no trailing slash
+# Generate keys in: System → Access → Users → (your user) → API keys
+api-base: "https://YOUR-OPNSENSE-HOST/api"
+api-key: "YOUR-API-KEY"
+api-secret: "YOUR-API-SECRET"
+
+# OPTIONAL: path to a custom CA bundle when OPNsense uses a self-signed cert.
+# Comment out or remove this key to use the system trust store.
+# ca-bundle: "/usr/local/etc/ssl/your-ca.pem"
+
+# REQUIRED: persistent state file written by dhcp6c-prefix-json.
+# This path is fixed by that script; only change if you also change it there.
+dhcp6c-pds-file: "/var/db/dhcp6c-pds.json"
+
+# REQUIRED: your site's ULA prefix block (RFC 4193 fd00::/8 range).
+# Replace with the actual /48 you allocated for your network.
+# Example: fd03:17ac:e938::/48
+ipv6-ula: "fdXX:XXXX:XXXX::/48"
+
+# REQUIRED: NPTv6 mapping definitions.
+#
+# Top-level keys are human-readable LAN segment labels (used in NPTv6 rule
+# descriptions — choose names that match your OPNsense interface descriptions).
+#
+#   interface:  OPNsense interface device name as reported by
+#               Interfaces → Overview (e.g., igc2,  lagg0, vlan0.10)
+#
+#   mappings:   WAN-interface-label -> PD selector
+#     pd-id:    PD index from dhcp6c-pds.json (0-based, matches id-assoc pd N
+#               numbering in the dhcp6c_igc*.conf.custom files)
+#     pd-sla:   subnet position within the delegated prefix (0 = first subnet)
+#     pd-len:   additional bits to carve from the PD
+#               0 = use the full PD as-is (e.g., a /64 stays a /64)
+#               4 = carve /64s from a /60 (selects the pd-sla-th /64)
+
+lan-interfaces:
+  LAN:
+    interface: igc2          # replace with your LAN device name
+    mappings:
+      WAN:                   # AT&T (or whichever ISP uses PD 2)
+        pd-id: 2
+        pd-sla: 0
+        pd-len: 0
+      WAN2:                  # Comcast / Xfinity (PD 0 is a /60; carve a /64)
+        pd-id: 0
+        pd-sla: 0
+        pd-len: 4
+
+  # Add additional LAN segments below.  Each segment that should get IPv6
+  # via NPTv6 needs an entry here.  Segments without a ULA address assigned
+  # are silently skipped at runtime.
+
+  # EXAMPLE — camera VLAN:
+  # CAM:
+  #   interface: vlan0.200
+  #   mappings:
+  #     WAN:
+  #       pd-id: 3
+  #       pd-sla: 0
+  #       pd-len: 0
+  #     WAN2:
+  #       pd-id: 0
+  #       pd-sla: 1
+  #       pd-len: 4
