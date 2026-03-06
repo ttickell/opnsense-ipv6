@@ -84,7 +84,7 @@ fi
 echo ""
 echo "Creating interface-specific dhcp6c wrapper symlinks from GUI mappings..."
 for gui_if in wan wan2; do
-    real_if=$(/usr/local/bin/php -d display_errors=0 -r 'require_once("/usr/local/etc/inc/config.inc"); require_once("/usr/local/etc/inc/interfaces.inc"); $cfg=config_read_array("interfaces", $argv[1]); $if=""; if (is_array($cfg) && !empty($cfg["if"])) { $if=$cfg["if"]; } if (empty($if)) { $if=get_real_interface($argv[1]); } if (is_string($if) && $if !== "") { echo $if; }' "${gui_if}" 2>/dev/null || true)
+    real_if=$(/usr/local/bin/php -d display_errors=0 -r 'require_once("/usr/local/etc/inc/config.inc"); $all=config_read_array("interfaces"); $if=""; $target=$argv[1]; if (is_array($all)) { if ($target === "wan" && isset($all["wan"]["if"]) && $all["wan"]["if"] !== "") { $if=$all["wan"]["if"]; } if ($target === "wan2") { if (isset($all["wan2"]["if"]) && $all["wan2"]["if"] !== "") { $if=$all["wan2"]["if"]; } if ($if === "") { foreach ($all as $entry) { if (is_array($entry) && isset($entry["descr"]) && isset($entry["if"]) && $entry["if"] !== "" && strtoupper($entry["descr"]) === "WAN2") { $if=$entry["if"]; break; } } } } } if (is_string($if) && $if !== "") { echo $if; }' "${gui_if}" 2>/dev/null || true)
     case "${real_if}" in
         ''|*[!A-Za-z0-9_.:-]*)
             echo "  WARN: could not resolve valid real interface for ${gui_if}; create wrapper symlink manually if needed"
