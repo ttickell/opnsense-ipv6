@@ -108,9 +108,7 @@ for gui_if in wan wan2; do
     fi
 done
 
-## ── OPNsense: dhcp6c -d flag ─────────────────────────────────────────────────
-warn "MANUAL CHECK REQUIRED: Verify 'Interfaces → Settings → IPv6 DHCP → Log level' is set to 'Info'"
-warn "  (This enables the -d flag so dhcp6c writes per-interface prefix files.)"
+## ── OPNsense GUI settings ───────────────────────────────────────────────────
 warn "MANUAL CHECK REQUIRED: Set WAN override -> /usr/local/etc/dhcp6c_wan.conf.custom"
 warn "MANUAL CHECK REQUIRED: Set WAN2 override -> /usr/local/etc/dhcp6c_wan2.conf.custom"
 

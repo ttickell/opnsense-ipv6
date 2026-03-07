@@ -127,9 +127,9 @@ After install:
    `ipv6-ula`, and `lan-interfaces` (see `usr/local/etc/checkset-nptv6.yml.example` for
    field-by-field documentation).
 
-2. In the OPNsense GUI, navigate to **Interfaces → Settings → IPv6 DHCP** and set
-   **Log level** to **Info**.  This passes the `-d` flag to `dhcp6c`, which causes it to
-   write the per-interface prefix files that `dhcp6c-prefix-json` reads.
+2. Optional troubleshooting: if per-interface prefix files are not appearing under `/tmp`
+    (for example `/tmp/vtnet0_prefixv6`), set **Interfaces → Settings → IPv6 DHCP**
+    **Log level** to **Info**.
 
 3. In the OPNsense GUI, for each WAN interface, navigate to
     **Interfaces → [WAN interface] → DHCPv6 Client**, enable **Override the configuration

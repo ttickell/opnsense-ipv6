@@ -7,11 +7,12 @@
 # reads the per-interface prefix files written by dhcp6c and merges them into
 # a persistent JSON state file.
 #
-# DHCP6C REQUIREMENT
-# ------------------
-# dhcp6c must be started with the "-d" flag so it writes the per-interface
-# prefix files that this script reads.  In OPNsense, enable this via:
-#   Interfaces → Settings → IPv6 DHCP → Log level = Info
+# DHCP6C PREFIX FILE NOTE
+# -----------------------
+# This script reads per-interface prefix files from /tmp (for example
+# /tmp/vtnet0_prefixv6).  On some OPNsense/dhcp6c combinations, enabling
+# Interfaces → Settings → IPv6 DHCP → Log level = Info (adds -d) may help
+# ensure those files are emitted during troubleshooting.
 #
 # INSTALL
 # -------
