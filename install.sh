@@ -82,20 +82,29 @@ if [ "${MISS}" -gt 0 ]; then
 fi
 
 echo ""
-echo "Creating interface-specific dhcp6c wrapper symlinks from GUI mappings..."
+echo "Creating interface-specific dhcp6c hook scripts from GUI mappings..."
 for gui_if in wan wan2; do
     real_if=$(/usr/local/bin/php -d display_errors=0 -r 'require_once("/usr/local/etc/inc/config.inc"); $all=config_read_array("interfaces"); $if=""; $target=$argv[1]; if (is_array($all)) { if ($target === "wan" && isset($all["wan"]["if"]) && $all["wan"]["if"] !== "") { $if=$all["wan"]["if"]; } if ($target === "wan2") { if (isset($all["wan2"]["if"]) && $all["wan2"]["if"] !== "") { $if=$all["wan2"]["if"]; } if ($if === "") { foreach ($all as $entry) { if (is_array($entry) && isset($entry["descr"]) && isset($entry["if"]) && $entry["if"] !== "" && strtoupper($entry["descr"]) === "WAN2") { $if=$entry["if"]; break; } } } } } if (is_string($if) && $if !== "") { echo $if; }' "${gui_if}" 2>/dev/null || true)
     case "${real_if}" in
         ''|*[!A-Za-z0-9_.:-]*)
-            echo "  WARN: could not resolve valid real interface for ${gui_if}; create wrapper symlink manually if needed"
+            echo "  WARN: could not resolve valid real interface for ${gui_if}; create hook script manually if needed"
             continue
             ;;
     esac
     if [ -n "${real_if}" ]; then
-        ln -sf /usr/local/bin/dhcp6c_interface_wrapper.sh "/usr/local/bin/dhcp6c_${real_if}.sh"
+        hook_path="/usr/local/bin/dhcp6c_${real_if}.sh"
+        if [ -L "${hook_path}" ]; then
+            rm -f "${hook_path}"
+        fi
+        cat > "${hook_path}" <<EOF
+#!/bin/sh
+export INTERFACE="${real_if}"
+exec /usr/local/bin/dhcp6c_wan_custom.sh "\$@"
+EOF
+        chmod 755 "${hook_path}"
         echo "  ${gui_if} -> ${real_if} -> /usr/local/bin/dhcp6c_${real_if}.sh"
     else
-        echo "  WARN: could not resolve real interface for ${gui_if}; create wrapper symlink manually if needed"
+        echo "  WARN: could not resolve real interface for ${gui_if}; create hook script manually if needed"
     fi
 done
 
@@ -117,9 +126,19 @@ echo ""
 echo "3) (Optional troubleshooting) If prefix files are missing under /tmp,"
 echo "   set Interfaces > Settings > IPv6 DHCP > Log level = Info"
 echo ""
-echo "4) If wrapper auto-detect failed above, create manual symlinks (example):"
-echo "   ln -sf /usr/local/bin/dhcp6c_interface_wrapper.sh /usr/local/bin/dhcp6c_vtnet0.sh"
-echo "   ln -sf /usr/local/bin/dhcp6c_interface_wrapper.sh /usr/local/bin/dhcp6c_vtnet1.sh"
+echo "4) If wrapper auto-detect failed above, create manual hook scripts (example):"
+echo "   cat > /usr/local/bin/dhcp6c_vtnet0.sh <<'EOF'"
+echo "   #!/bin/sh"
+echo "   export INTERFACE=\"vtnet0\""
+echo "   exec /usr/local/bin/dhcp6c_wan_custom.sh \"\$@\""
+echo "   EOF"
+echo "   chmod 755 /usr/local/bin/dhcp6c_vtnet0.sh"
+echo "   cat > /usr/local/bin/dhcp6c_vtnet1.sh <<'EOF'"
+echo "   #!/bin/sh"
+echo "   export INTERFACE=\"vtnet1\""
+echo "   exec /usr/local/bin/dhcp6c_wan_custom.sh \"\$@\""
+echo "   EOF"
+echo "   chmod 755 /usr/local/bin/dhcp6c_vtnet1.sh"
 echo ""
 echo "5) Verify setup:"
 echo "   sh preflight-check.sh"

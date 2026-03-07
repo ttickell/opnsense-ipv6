@@ -131,6 +131,9 @@ After install:
     (for example `/tmp/vtnet0_prefixv6`), set **Interfaces → Settings → IPv6 DHCP**
     **Log level** to **Info**.
 
+> [!NOTE]
+> **2026-03-07 update:** Setting `dhcp6c` log level to **Info** is **not** a required setup step for this project. It is retained only as a troubleshooting option when prefix files are not being emitted under `/tmp`.
+
 3. In the OPNsense GUI, for each WAN interface, navigate to
     **Interfaces → [WAN interface] → DHCPv6 Client**, enable **Override the configuration
     for this interface**, and assign override files by **provider role placeholder**:
@@ -157,7 +160,7 @@ After install:
 | `/usr/local/etc/dhcp6c_wan2.conf.custom` | DHCPv6 override template for GUI interface WAN2 |
 | `/usr/local/etc/checkset-nptv6.yml` | Site config for NPTv6 script (API creds + interface map) |
 | `/usr/local/bin/dhcp6c_wan_custom.sh` | dhcp6c exit hook — updates resolvers and triggers `newipv6` |
-| `/usr/local/bin/dhcp6c_interface_wrapper.sh` | Wrapper target; symlinked as `dhcp6c_<real_if>.sh` at install/startup |
+| `/usr/local/bin/dhcp6c_interface_wrapper.sh` | Wrapper helper used to generate per-interface `dhcp6c_<real_if>.sh` hook scripts at install/startup |
 | `/usr/local/bin/dhcp6c-prefix-json` | Writes current PD state to `/var/db/dhcp6c-pds.json` |
 | `/usr/local/bin/dhcp6c-checkset-nptv6` | Reconciles OPNsense NPTv6 rules with current PD state |
 | `/usr/local/bin/dhcp6c-ula-mapping.py` | Orchestrator — triggers pipeline when prefix files change |

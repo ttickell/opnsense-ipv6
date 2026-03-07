@@ -106,7 +106,7 @@ for script in dhcp6c_wan_custom.sh dhcp6c_interface_wrapper.sh \
     fi
 done
 
-## ── dhcp6c real-interface wrapper links ─────────────────────────────────────
+## ── dhcp6c real-interface hook scripts ──────────────────────────────────────
 for gui_if in wan wan2; do
     real_if=$(/usr/local/bin/php -d display_errors=0 -r 'require_once("/usr/local/etc/inc/config.inc"); $all=config_read_array("interfaces"); $if=""; $target=$argv[1]; if (is_array($all)) { if ($target === "wan" && isset($all["wan"]["if"]) && $all["wan"]["if"] !== "") { $if=$all["wan"]["if"]; } if ($target === "wan2") { if (isset($all["wan2"]["if"]) && $all["wan2"]["if"] !== "") { $if=$all["wan2"]["if"]; } if ($if === "") { foreach ($all as $entry) { if (is_array($entry) && isset($entry["descr"]) && isset($entry["if"]) && $entry["if"] !== "" && strtoupper($entry["descr"]) === "WAN2") { $if=$entry["if"]; break; } } } } } if (is_string($if) && $if !== "") { echo $if; }' "${gui_if}" 2>/dev/null || true)
     case "${real_if}" in
@@ -117,10 +117,12 @@ for gui_if in wan wan2; do
     esac
     if [ -n "${real_if}" ]; then
         link_path="/usr/local/bin/dhcp6c_${real_if}.sh"
-        if [ -L "${link_path}" ] || [ -x "${link_path}" ]; then
-            ok "${gui_if} wrapper present (${link_path})"
+        if [ -x "${link_path}" ] && [ ! -L "${link_path}" ]; then
+            ok "${gui_if} hook script present (${link_path})"
+        elif [ -L "${link_path}" ]; then
+            warn "${gui_if} hook script is still a symlink (${link_path}) — rerun install.sh"
         else
-            warn "${gui_if} wrapper missing (${link_path}) — rerun install.sh"
+            warn "${gui_if} hook script missing (${link_path}) — rerun install.sh"
         fi
     else
         warn "Could not resolve real interface for ${gui_if}"
