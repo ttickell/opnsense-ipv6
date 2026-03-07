@@ -58,11 +58,30 @@ done
 
 ## ── Configuration file ───────────────────────────────────────────────────────
 if [ -f /usr/local/etc/checkset-nptv6.yml ]; then
-    # Quick placeholder check
-    if grep -q "YOUR-OPNSENSE-HOST\|YOUR-API-KEY\|fdXX" /usr/local/etc/checkset-nptv6.yml 2>/dev/null; then
-        fail "/usr/local/etc/checkset-nptv6.yml still contains placeholder values — edit it"
-    else
+    # Placeholder check (parsed YAML values only; comments do not count)
+    if /usr/local/bin/python3 - <<'PY'
+import re
+import sys
+import yaml
+
+path = "/usr/local/etc/checkset-nptv6.yml"
+with open(path, "r") as fh:
+    cfg = yaml.safe_load(fh) or {}
+
+checks = [
+    str(cfg.get("api-base", "")),
+    str(cfg.get("api-key", "")),
+    str(cfg.get("api-secret", "")),
+    str(cfg.get("ipv6-ula", "")),
+]
+
+placeholder = re.compile(r"YOUR-OPNSENSE-HOST|YOUR-API-KEY|YOUR-API-SECRET|fdXX", re.IGNORECASE)
+sys.exit(1 if any(placeholder.search(val) for val in checks) else 0)
+PY
+    then
         ok "/usr/local/etc/checkset-nptv6.yml present and appears customized"
+    else
+        fail "/usr/local/etc/checkset-nptv6.yml still contains placeholder values in active keys — edit it"
     fi
 else
     warn "/usr/local/etc/checkset-nptv6.yml not found — copy from .example and fill in values"
