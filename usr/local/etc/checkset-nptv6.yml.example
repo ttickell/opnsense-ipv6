@@ -19,6 +19,10 @@ api-base: "https://YOUR-OPNSENSE-HOST/api"
 api-key: "YOUR-API-KEY"
 api-secret: "YOUR-API-SECRET"
 
+# OPTIONAL: disable TLS verification for self-signed local certificates.
+# SECURITY: only use this for trusted local endpoints (for example 127.0.0.1).
+# api-verify-tls: false
+
 # OPTIONAL: path to a custom CA bundle when OPNsense uses a self-signed cert.
 # Comment out or remove this key to use the system trust store.
 # ca-bundle: "/usr/local/etc/ssl/your-ca.pem"

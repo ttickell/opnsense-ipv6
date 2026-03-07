@@ -43,6 +43,11 @@ try:
 except ImportError:
     _missing.append("requests  (install: pkg install py311-requests)")
 
+try:
+    import urllib3
+except ImportError:
+    urllib3 = None
+
 if _missing:
     import syslog as _sl
     _sl.openlog("dhcp6c-nptv6", _sl.LOG_PID, _sl.LOG_DAEMON)
@@ -68,6 +73,7 @@ MAX_RETRIES     = 3
 
 SYSLOG_TAG = "dhcp6c-nptv6"
 syslog.openlog(SYSLOG_TAG, syslog.LOG_PID, syslog.LOG_DAEMON)
+REQUEST_VERIFY_TLS = True
 
 # ---------------------------------------------------------------------------
 # Logging helpers
@@ -84,6 +90,19 @@ def log_warn(msg: str) -> None:
 
 def log_err(msg: str) -> None:
     syslog.syslog(syslog.LOG_ERR, msg)
+
+
+def _to_bool(value, default: bool = True) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in ("1", "true", "yes", "on"):
+        return True
+    if text in ("0", "false", "no", "off"):
+        return False
+    return default
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +132,7 @@ def _api_get(url: str, auth: tuple, retries: int = MAX_RETRIES) -> dict:
     last_exc = None
     for attempt in range(1, retries + 1):
         try:
-            resp = requests.get(url, auth=auth, timeout=REQUEST_TIMEOUT, verify=True)
+            resp = requests.get(url, auth=auth, timeout=REQUEST_TIMEOUT, verify=REQUEST_VERIFY_TLS)
             resp.raise_for_status()
             return resp.json()
         except (requests.RequestException, ValueError) as exc:
@@ -128,7 +147,7 @@ def _api_post(url: str, auth: tuple, data: dict, retries: int = MAX_RETRIES) -> 
     for attempt in range(1, retries + 1):
         try:
             resp = requests.post(url, auth=auth, json=data,
-                                 timeout=REQUEST_TIMEOUT, verify=True)
+                                 timeout=REQUEST_TIMEOUT, verify=REQUEST_VERIFY_TLS)
             resp.raise_for_status()
             result = resp.json()
             if isinstance(result, dict) and result.get("result") == "failed":
@@ -209,6 +228,8 @@ def npt_rule_apply(url_base: str, key: str, secret: str) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    global REQUEST_VERIFY_TLS
+
     # --- Load and validate config --------------------------------------------
     if not os.path.exists(CONFIG_FILE):
         log_err(f"Configuration file not found: {CONFIG_FILE} "
@@ -220,11 +241,17 @@ def main() -> None:
 
     validate_config(config)
 
-    url_base    = config["api-base"]
+    url_base    = config["api-base"].rstrip("/")
     api_key     = config["api-key"]
     api_secret  = config["api-secret"]
     pds_file    = config["dhcp6c-pds-file"]
     ula_prefix  = config["ipv6-ula"]
+
+    REQUEST_VERIFY_TLS = _to_bool(config.get("api-verify-tls"), True)
+    if not REQUEST_VERIFY_TLS:
+        log_warn("TLS certificate verification disabled for OPNsense API (api-verify-tls=false)")
+        if urllib3 is not None:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     if "ca-bundle" in config:
         os.environ["REQUESTS_CA_BUNDLE"] = config["ca-bundle"]

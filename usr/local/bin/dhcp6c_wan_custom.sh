@@ -10,6 +10,8 @@
 ## Permissions: chmod 755
 
 TAG="dhcp6c-wan-hook"
+PREFIX_JSON_SCRIPT="/usr/local/bin/dhcp6c-prefix-json"
+CHECKSET_NPTV6_SCRIPT="/usr/local/bin/dhcp6c-checkset-nptv6"
 
 log_info() {
     /usr/bin/logger -t "${TAG}" -- "$*"
@@ -35,6 +37,29 @@ if [ -z "$INTERFACE" ]; then
 fi
 
 log_info "INTERFACE=${INTERFACE} REASON=${REASON}"
+
+run_prefix_nptv6_sync() {
+    if [ -x "${PREFIX_JSON_SCRIPT}" ]; then
+        if ! "${PREFIX_JSON_SCRIPT}" >/dev/null 2>&1; then
+            log_err "prefix-json update failed"
+            return 1
+        fi
+    else
+        log_err "Missing script: ${PREFIX_JSON_SCRIPT}"
+        return 1
+    fi
+
+    if [ -x "${CHECKSET_NPTV6_SCRIPT}" ]; then
+        if ! "${CHECKSET_NPTV6_SCRIPT}" >/dev/null 2>&1; then
+            log_err "checkset-nptv6 failed"
+            return 1
+        fi
+    else
+        log_info "checkset script not present: ${CHECKSET_NPTV6_SCRIPT}"
+    fi
+
+    return 0
+}
 
 case $REASON in
 SOLICIT|INFOREQ|REBIND|RENEW|REQUEST)
@@ -69,6 +94,8 @@ SOLICIT|INFOREQ|REBIND|RENEW|REQUEST)
     fi
 
     /usr/local/sbin/configctl -d interface newipv6 "${INTERFACE}" ${FORCE}
+
+    run_prefix_nptv6_sync || true
     ;;
 EXIT|RELEASE)
     log_info "${REASON} on ${INTERFACE}: clearing resolvers and triggering newipv6"
@@ -78,6 +105,11 @@ EXIT|RELEASE)
     /usr/local/sbin/ifctl -i "${INTERFACE}" -6pd
 
     /usr/local/sbin/configctl -d interface newipv6 "${INTERFACE}"
+
+    if [ -x "${PREFIX_JSON_SCRIPT}" ]; then
+        "${PREFIX_JSON_SCRIPT}" >/dev/null 2>&1 || \
+            log_err "prefix-json update failed after ${REASON}"
+    fi
     ;;
 *)
     log_info "${REASON} on ${INTERFACE}: no action taken (ignored reason)"
