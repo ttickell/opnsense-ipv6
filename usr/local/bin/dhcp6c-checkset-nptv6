@@ -191,6 +191,31 @@ def ipv6_network_from_interface(address: str) -> str:
     return str(ipaddress.IPv6Interface(address).network)
 
 
+def interface_ipv6_entries(iface_data: dict, real_iface: str) -> list:
+    if not isinstance(iface_data, dict):
+        log_warn(f"Interface API payload for {real_iface} is not an object — skipping")
+        return []
+
+    message = iface_data.get("message", {})
+    if isinstance(message, dict):
+        ipv6_obj = message.get("ipv6", {})
+        if isinstance(ipv6_obj, dict):
+            value = ipv6_obj.get("value", [])
+            if isinstance(value, list):
+                return value
+            log_warn(f"Interface API payload for {real_iface} has non-list ipv6.value — skipping")
+            return []
+        log_warn(f"Interface API payload for {real_iface} has non-object message.ipv6 — skipping")
+        return []
+
+    if isinstance(message, str):
+        log_warn(f"Interface API returned message for {real_iface}: {message}")
+        return []
+
+    log_warn(f"Interface API payload for {real_iface} has unexpected message type — skipping")
+    return []
+
+
 # ---------------------------------------------------------------------------
 # NPTv6 API operations
 # ---------------------------------------------------------------------------
@@ -313,7 +338,9 @@ def main() -> None:
 
         # Find the ULA address currently assigned to this interface
         ula_addr = None
-        for item in iface_data.get("message", {}).get("ipv6", {}).get("value", []):
+        for item in interface_ipv6_entries(iface_data, real_iface):
+            if not isinstance(item, dict):
+                continue
             addr = item.get("ipaddr", "")
             if addr and ipv6_in_ula(ula_prefix, addr):
                 ula_addr = addr

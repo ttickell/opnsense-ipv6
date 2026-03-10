@@ -96,6 +96,41 @@ for cfg in /usr/local/etc/dhcp6c_wan.conf.custom /usr/local/etc/dhcp6c_wan2.conf
     fi
 done
 
+## ── ha-singleton.conf ALT_DEFROUTE sanity ────────────────────────────────────
+HA_CONF="/usr/local/etc/ha-singleton.conf"
+if [ -f "${HA_CONF}" ]; then
+    # Extract values without sourcing (avoid executing arbitrary code)
+    ALT_V4=$(grep -E '^[[:space:]]*ALT_DEFROUTE_IPV4=' "${HA_CONF}" | tail -1 | sed 's/.*="\?\([^"#]*\)"\?.*/\1/' | tr -d '[:space:]')
+    ALT_V6=$(grep -E '^[[:space:]]*ALT_DEFROUTE_IPV6=' "${HA_CONF}" | tail -1 | sed 's/.*="\?\([^"#]*\)"\?.*/\1/' | tr -d '[:space:]')
+
+    if [ -z "${ALT_V4}" ] && [ -z "${ALT_V6}" ]; then
+        warn "${HA_CONF} found but ALT_DEFROUTE_IPV4/ALT_DEFROUTE_IPV6 not set — BACKUP routing will not work"
+    else
+        # Collect all local IPv4 addresses
+        LOCAL_V4=$(ifconfig | awk '/inet / {print $2}')
+        # Collect all local IPv6 addresses (strip scope)
+        LOCAL_V6=$(ifconfig | awk '/inet6 / {gsub(/%.*/, "", $2); print $2}')
+
+        if [ -n "${ALT_V4}" ]; then
+            if echo "${LOCAL_V4}" | grep -qxF "${ALT_V4}"; then
+                fail "ALT_DEFROUTE_IPV4 (${ALT_V4}) is a local address on this node — must be the PEER's LAN IP"
+            else
+                ok "ALT_DEFROUTE_IPV4 (${ALT_V4}) is not a local address"
+            fi
+        fi
+
+        if [ -n "${ALT_V6}" ]; then
+            if echo "${LOCAL_V6}" | grep -qxF "${ALT_V6}"; then
+                fail "ALT_DEFROUTE_IPV6 (${ALT_V6}) is a local address on this node — must be the PEER's LAN IPv6"
+            else
+                ok "ALT_DEFROUTE_IPV6 (${ALT_V6}) is not a local address"
+            fi
+        fi
+    fi
+else
+    warn "${HA_CONF} not found — skipping ALT_DEFROUTE validation (install opnsense-ha first)"
+fi
+
 ## ── Script executability ─────────────────────────────────────────────────────
 for script in dhcp6c_wan_custom.sh dhcp6c_interface_wrapper.sh \
               dhcp6c-prefix-json dhcp6c-checkset-nptv6 dhcp6c-ula-mapping.py; do
