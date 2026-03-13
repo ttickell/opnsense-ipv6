@@ -363,23 +363,27 @@ def main() -> None:
                 log_warn(f"  {wan_label}: could not compute dest_net for pd-id={pd_id} — skipping")
                 continue
 
-            # Check if this exact rule already exists
+            # Resolve WAN interface identifier — needed for both matching and adding
+            wan_dev = global_devs.get(wan_label, {})
+            identifier = wan_dev.get("identifier")
+            if not identifier:
+                log_warn(f"  {wan_label}: OPNsense interface not found in interface export — skipping")
+                continue
+
+            # Check if this exact rule already exists (nets AND interface must all match)
             existing_row = None
             for row in npt_config.get("rows", []):
-                if row.get("source_net") == source_net and row.get("destination_net") == dest_net:
+                if (row.get("source_net") == source_net
+                        and row.get("destination_net") == dest_net
+                        and row.get("interface") == identifier):
                     existing_row = row
                     break
 
             if existing_row is not None:
                 existing_row["_desired"] = True
                 rules_skipped += 1
-                log_info(f"  {wan_label}: rule {source_net} <-> {dest_net} already correct")
+                log_info(f"  {wan_label}: rule {source_net} <-> {dest_net} via {identifier} already correct")
             else:
-                wan_dev = global_devs.get(wan_label, {})
-                identifier = wan_dev.get("identifier")
-                if not identifier:
-                    log_warn(f"  {wan_label}: OPNsense interface not found in interface export — skipping add")
-                    continue
                 try:
                     npt_rule_add(source_net, dest_net, identifier, lan_label, wan_label,
                                  url_base, api_key, api_secret)
